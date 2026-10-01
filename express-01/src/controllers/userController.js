@@ -1,4 +1,5 @@
 import { userService } from "../services/index.js";
+import { AppError } from "../utils/index.js";
 
 const getUsers = async (req, res) => {
   const users = await userService.getAllUsers();
@@ -8,7 +9,7 @@ const getUsers = async (req, res) => {
 const getUser = async (req, res) => {
   const user = await userService.getUserById(req.params.userId);
   if (!user) {
-    return res.status(404).send();
+    throw new AppError("Usuário não encontrado.", 404);
   }
   return res.status(200).send(user);
 };
@@ -29,7 +30,7 @@ const updateUser = async (req, res) => {
     email,
   });
   if (!user) {
-    return res.status(404).send();
+    throw new AppError("Usuário não encontrado.", 404);
   }
   return res.status(200).send(user);
 };
@@ -37,7 +38,7 @@ const updateUser = async (req, res) => {
 const deleteUser = async (req, res) => {
   const isDeleted = await userService.deleteUser(req.params.userId);
   if (!isDeleted) {
-    return res.status(404).send();
+    throw new AppError("Usuário não encontrado.", 404);
   }
   return res.status(204).send();
 };

@@ -1,0 +1,6 @@
+# Diretório de tarefas internas e scripts de teste
+tarefas/
+
+# Sistema operacional e logs
+.DS_Store
+*.log
