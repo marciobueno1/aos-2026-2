@@ -5,9 +5,10 @@ import {
   corsMiddleware,
   logMiddleware,
   contextMiddleware,
+  notFoundMiddleware,
+  errorMiddleware,
 } from "./middlewares/index.js";
 import * as routes from "./routes/index.js";
-import { AppError } from "./utils/index.js";
 
 const app = express();
 
@@ -29,62 +30,10 @@ app.use("/users", routes.user);
 app.use("/messages", routes.message);
 
 // rota não encontrada (404)
-app.use((req, res, next) => {
-  next(new AppError(`Rota ${req.originalUrl} não encontrada no servidor.`, 404));
-});
+app.use(notFoundMiddleware);
 
 // middleware global de erro
-app.use((err, req, res, next) => {
-  const isDev = process.env.NODE_ENV !== "production";
-
-  if (isDev) {
-    console.error(err.stack);
-  } else {
-    console.error(`${err.name || "Error"}: ${err.message}`);
-  }
-
-  if (err instanceof AppError) {
-    return res.status(err.statusCode).send({
-      status: err.status,
-      message: err.message,
-      ...(isDev && { stack: err.stack }),
-    });
-  }
-
-  if (err.name === "SequelizeUniqueConstraintError") {
-    return res.status(409).send({
-      status: "fail",
-      message: err.errors?.length
-        ? err.errors.map((e) => e.message).join(", ")
-        : "Registro duplicado.",
-      ...(isDev && { stack: err.stack }),
-    });
-  }
-
-  if (err.name === "SequelizeValidationError") {
-    return res.status(400).send({
-      status: "fail",
-      message: err.errors?.length
-        ? err.errors.map((e) => e.message).join(", ")
-        : err.message,
-      ...(isDev && { stack: err.stack }),
-    });
-  }
-
-  if (err.name === "SequelizeDatabaseError" && err.original?.code === "22P02") {
-    return res.status(400).send({
-      status: "fail",
-      message: "Identificador (ID) fornecido possui formato inválido.",
-      ...(isDev && { stack: err.stack }),
-    });
-  }
-
-  return res.status(500).send({
-    status: "error",
-    message: isDev ? err.message : "Algo deu errado no servidor.",
-    ...(isDev && { stack: err.stack }),
-  });
-});
+app.use(errorMiddleware);
 
 const port = process.env.PORT || 3000;
 
