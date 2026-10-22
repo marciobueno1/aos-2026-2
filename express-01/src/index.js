@@ -8,16 +8,18 @@ import {
   contextMiddleware,
   notFoundMiddleware,
   errorMiddleware,
+  limiterMiddleware,
 } from "./middlewares/index.js";
 import * as routes from "./routes/index.js";
 
 const app = express();
 
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 // middlewares
 app.use(helmet());
 app.use(corsMiddleware);
+app.use(limiterMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(logMiddleware);
