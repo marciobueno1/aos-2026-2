@@ -1,6 +1,8 @@
 import "dotenv/config";
+import "./utils/env.js";
 import express from "express";
 import helmet from "helmet";
+import { env } from "./utils/index.js";
 import models, { sequelize } from "./models/index.js";
 import {
   corsMiddleware,
@@ -39,7 +41,7 @@ app.use(notFoundMiddleware);
 // middleware global de erro
 app.use(errorMiddleware);
 
-const port = process.env.PORT || 3000;
+const port = env.PORT;
 
 const eraseDatabaseOnSync = process.env.ERASE_DATABASE_ON_SYNC === "true";
 const syncDatabase =

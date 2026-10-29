@@ -1,12 +1,29 @@
+import { ZodError } from "zod";
 import { AppError } from "../utils/index.js";
 
 const errorMiddleware = (err, req, res, next) => {
   const isDev = process.env.NODE_ENV !== "production";
+  const isTest = process.env.NODE_ENV === "test";
 
-  if (isDev) {
-    console.error(err.stack);
-  } else {
-    console.error(`${err.name || "Error"}: ${err.message}`);
+  if (!isTest) {
+    if (isDev) {
+      console.error(err.stack);
+    } else {
+      console.error(`${err.name || "Error"}: ${err.message}`);
+    }
+  }
+
+  if (err instanceof ZodError || err.name === "ZodError") {
+    const formattedDetails = (err.issues || err.errors || []).map((e) => {
+      const pathStr = e.path && e.path.length > 0 ? `${e.path.join(".")}: ` : "";
+      return `${pathStr}${e.message}`;
+    });
+    return res.status(400).send({
+      status: "fail",
+      message: formattedDetails.join("; "),
+      errors: formattedDetails,
+      ...(isDev && { stack: err.stack }),
+    });
   }
 
   if (err instanceof AppError) {
