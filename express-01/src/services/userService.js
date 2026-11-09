@@ -1,4 +1,5 @@
 import models from "../models/index.js";
+import sessionService from "./sessionService.js";
 
 const getAllUsers = async () => {
   return await models.User.findAll();
@@ -12,22 +13,30 @@ const getUserByLogin = async (login) => {
   return await models.User.findByLogin(login);
 };
 
-const createUser = async ({ username, email }) => {
+const createUser = async ({ username, email, password }) => {
   return await models.User.create({
     username,
     email,
+    password,
   });
 };
 
-const updateUser = async (id, { username, email }) => {
+const updateUser = async (id, { username, email, password }) => {
   const user = await getUserById(id);
   if (!user) {
     return null;
   }
-  return await user.update({
+  const updatedUser = await user.update({
     ...(username !== undefined && { username }),
     ...(email !== undefined && { email }),
+    ...(password !== undefined && { password }),
   });
+
+  if (password !== undefined) {
+    await sessionService.destroyUserRefreshTokens(id);
+  }
+
+  return updatedUser;
 };
 
 const deleteUser = async (id) => {
@@ -45,4 +54,3 @@ export default {
   updateUser,
   deleteUser,
 };
-

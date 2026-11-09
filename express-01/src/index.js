@@ -7,7 +7,8 @@ import models, { sequelize } from "./models/index.js";
 import {
   corsMiddleware,
   logMiddleware,
-  contextMiddleware,
+  authMiddleware,
+  protectRoutes,
   notFoundMiddleware,
   errorMiddleware,
   limiterMiddleware,
@@ -25,7 +26,8 @@ app.use(limiterMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(logMiddleware);
-app.use(contextMiddleware);
+app.use(authMiddleware);
+app.use(protectRoutes);
 
 // rotas
 app.get("/", (req, res) => {
@@ -67,6 +69,7 @@ const createUsersWithMessages = async () => {
     {
       username: "rwieruch",
       email: "rwieruch@email.com",
+      password: "password123",
       messages: [
         {
           text: "Published the Road to learn React",
@@ -82,6 +85,7 @@ const createUsersWithMessages = async () => {
     {
       username: "ddavids",
       email: "ddavids@email.com",
+      password: "password456",
       messages: [
         {
           text: "Happy to release ...",

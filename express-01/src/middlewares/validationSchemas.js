@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Schema de criação de usuário.
- * Valida obrigatoriedade de username e email com formato válido.
+ * Valida obrigatoriedade de username, email com formato válido e senha entre 7 e 42 caracteres.
  */
 export const createUserSchema = z.object({
   body: z.object({
@@ -15,12 +15,16 @@ export const createUserSchema = z.object({
       .trim()
       .min(1, "Campo obrigatório")
       .pipe(z.email("Formato de e-mail inválido")),
+    password: z
+      .string("Campo obrigatório")
+      .min(7, "A senha deve ter entre 7 e 42 caracteres.")
+      .max(42, "A senha deve ter entre 7 e 42 caracteres."),
   }),
 });
 
 /**
  * Schema de atualização de usuário.
- * Permite atualização parcial de username e/ou email,
+ * Permite atualização parcial de username, email e/ou password,
  * exigindo que ao menos um campo seja enviado.
  */
 export const updateUserSchema = z.object({
@@ -36,11 +40,20 @@ export const updateUserSchema = z.object({
         .trim()
         .pipe(z.email("Formato de e-mail inválido"))
         .optional(),
+      password: z
+        .string()
+        .min(7, "A senha deve ter entre 7 e 42 caracteres.")
+        .max(42, "A senha deve ter entre 7 e 42 caracteres.")
+        .optional(),
     })
     .refine(
-      (data) => data.username !== undefined || data.email !== undefined,
+      (data) =>
+        data.username !== undefined ||
+        data.email !== undefined ||
+        data.password !== undefined,
       {
-        message: "Ao menos um campo (username ou email) deve ser fornecido para atualização.",
+        message:
+          "Ao menos um campo (username, email ou password) deve ser fornecido para atualização.",
       }
     ),
 });
@@ -90,5 +103,34 @@ export const updateMessageSchema = z.object({
 export const messageIdParamSchema = z.object({
   params: z.object({
     messageId: z.uuid("Formato de UUID inválido"),
+  }),
+});
+
+/**
+ * Schema de login/autenticação.
+ * Exige credenciais de login (username ou email) e senha.
+ */
+export const loginSchema = z.object({
+  body: z.object({
+    login: z
+      .string("Campo obrigatório")
+      .trim()
+      .min(1, "Campo obrigatório"),
+    password: z
+      .string("Campo obrigatório")
+      .min(1, "Campo obrigatório"),
+  }),
+});
+
+/**
+ * Schema de refresh token e logout.
+ * Exige a string do refresh token no body.
+ */
+export const refreshTokenSchema = z.object({
+  body: z.object({
+    refreshToken: z
+      .string("Campo obrigatório")
+      .trim()
+      .min(1, "Campo obrigatório"),
   }),
 });

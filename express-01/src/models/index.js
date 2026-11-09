@@ -3,8 +3,12 @@ import pg from "pg";
 
 import getUserModel from "./user.js";
 import getMessageModel from "./message.js";
+import getRefreshTokenModel from "./refreshToken.js";
 
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
+const databaseUrl =
+  process.env.DATABASE_URL || "postgres://dummy:dummy@localhost:5432/dummy_db";
+
+const sequelize = new Sequelize(databaseUrl, {
   dialect: "postgres",
   dialectModule: pg,
 });
@@ -12,6 +16,7 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
 const models = {
   User: getUserModel(sequelize, Sequelize),
   Message: getMessageModel(sequelize, Sequelize),
+  RefreshToken: getRefreshTokenModel(sequelize, Sequelize),
 };
 
 Object.keys(models).forEach((key) => {

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+
 import {
   createUserSchema,
   updateUserSchema,
@@ -7,29 +8,33 @@ import {
   createMessageSchema,
   updateMessageSchema,
   messageIdParamSchema,
+  loginSchema,
+  refreshTokenSchema,
 } from "../src/middlewares/validationSchemas.js";
 
-const VALID_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+const VALID_UUID = "c253ffec-c3eb-460f-b42e-152e00e23e20";
 
 // -------------------------------------------------------------
 // createUserSchema
 // -------------------------------------------------------------
-test("Fase 6 - createUserSchema: aceita username e email válidos e faz trim", () => {
+test("Fase 6/7 - createUserSchema: aceita username, email e password válidos e faz trim", () => {
   const result = createUserSchema.safeParse({
     body: {
       username: "  alice  ",
       email: "  alice@unicap.br  ",
+      password: "password123",
     },
   });
 
   assert.equal(result.success, true);
   assert.equal(result.data.body.username, "alice");
   assert.equal(result.data.body.email, "alice@unicap.br");
+  assert.equal(result.data.body.password, "password123");
 });
 
-test("Fase 6 - createUserSchema: rejeita ausência de username", () => {
+test("Fase 6/7 - createUserSchema: rejeita ausência de username", () => {
   const result = createUserSchema.safeParse({
-    body: { email: "alice@unicap.br" },
+    body: { email: "alice@unicap.br", password: "password123" },
   });
   assert.equal(result.success, false);
   assert.equal(
@@ -38,21 +43,21 @@ test("Fase 6 - createUserSchema: rejeita ausência de username", () => {
   );
 });
 
-test("Fase 6 - createUserSchema: rejeita username vazio ou com apenas espaços", () => {
+test("Fase 6/7 - createUserSchema: rejeita username vazio ou com apenas espaços", () => {
   const emptyRes = createUserSchema.safeParse({
-    body: { username: "    ", email: "alice@unicap.br" },
+    body: { username: "    ", email: "alice@unicap.br", password: "password123" },
   });
   assert.equal(emptyRes.success, false);
 });
 
-test("Fase 6 - createUserSchema: rejeita ausência ou formato inválido de email", () => {
+test("Fase 6/7 - createUserSchema: rejeita ausência ou formato inválido de email", () => {
   const noEmail = createUserSchema.safeParse({
-    body: { username: "alice" },
+    body: { username: "alice", password: "password123" },
   });
   assert.equal(noEmail.success, false);
 
   const invalidEmail = createUserSchema.safeParse({
-    body: { username: "alice", email: "invalid-email-format" },
+    body: { username: "alice", email: "invalid-email-format", password: "password123" },
   });
   assert.equal(invalidEmail.success, false);
   assert.equal(
@@ -63,10 +68,38 @@ test("Fase 6 - createUserSchema: rejeita ausência ou formato inválido de email
   );
 });
 
+test("Fase 7 - createUserSchema: valida limites de tamanho da senha (7 a 42 caracteres)", () => {
+  const tooShort = createUserSchema.safeParse({
+    body: { username: "alice", email: "alice@unicap.br", password: "12345" },
+  });
+  assert.equal(tooShort.success, false);
+  assert.equal(
+    tooShort.error.issues.some((i) =>
+      i.message.includes("A senha deve ter entre 7 e 42 caracteres.")
+    ),
+    true
+  );
+
+  const tooLong = createUserSchema.safeParse({
+    body: {
+      username: "alice",
+      email: "alice@unicap.br",
+      password: "a".repeat(43),
+    },
+  });
+  assert.equal(tooLong.success, false);
+  assert.equal(
+    tooLong.error.issues.some((i) =>
+      i.message.includes("A senha deve ter entre 7 e 42 caracteres.")
+    ),
+    true
+  );
+});
+
 // -------------------------------------------------------------
 // updateUserSchema
 // -------------------------------------------------------------
-test("Fase 6 - updateUserSchema: permite atualizar apenas username", () => {
+test("Fase 6/7 - updateUserSchema: permite atualizar apenas username", () => {
   const result = updateUserSchema.safeParse({
     body: { username: "novo_nome" },
   });
@@ -75,7 +108,7 @@ test("Fase 6 - updateUserSchema: permite atualizar apenas username", () => {
   assert.equal(result.data.body.email, undefined);
 });
 
-test("Fase 6 - updateUserSchema: permite atualizar apenas email", () => {
+test("Fase 6/7 - updateUserSchema: permite atualizar apenas email", () => {
   const result = updateUserSchema.safeParse({
     body: { email: "novo_email@unicap.br" },
   });
@@ -83,29 +116,42 @@ test("Fase 6 - updateUserSchema: permite atualizar apenas email", () => {
   assert.equal(result.data.body.email, "novo_email@unicap.br");
 });
 
-test("Fase 6 - updateUserSchema: permite atualizar ambos username e email", () => {
+test("Fase 6/7 - updateUserSchema: permite atualizar apenas password", () => {
   const result = updateUserSchema.safeParse({
-    body: { username: "novo_nome", email: "novo_email@unicap.br" },
+    body: { password: "newpassword123" },
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data.body.password, "newpassword123");
+});
+
+test("Fase 6/7 - updateUserSchema: permite atualizar username, email e password", () => {
+  const result = updateUserSchema.safeParse({
+    body: {
+      username: "novo_nome",
+      email: "novo_email@unicap.br",
+      password: "newpassword123",
+    },
   });
   assert.equal(result.success, true);
   assert.equal(result.data.body.username, "novo_nome");
   assert.equal(result.data.body.email, "novo_email@unicap.br");
+  assert.equal(result.data.body.password, "newpassword123");
 });
 
-test("Fase 6 - updateUserSchema: rejeita payload vazio com mensagem explicativa", () => {
+test("Fase 6/7 - updateUserSchema: rejeita payload vazio com mensagem explicativa", () => {
   const result = updateUserSchema.safeParse({
     body: {},
   });
   assert.equal(result.success, false);
   assert.equal(
     result.error.issues.some((i) =>
-      i.message.includes("Ao menos um campo (username ou email) deve ser fornecido")
+      i.message.includes("Ao menos um campo (username, email ou password) deve ser fornecido")
     ),
     true
   );
 });
 
-test("Fase 6 - updateUserSchema: rejeita username vazio e email inválido", () => {
+test("Fase 6/7 - updateUserSchema: rejeita username vazio e email inválido", () => {
   const emptyUsername = updateUserSchema.safeParse({
     body: { username: "   " },
   });
@@ -194,4 +240,37 @@ test("Fase 6 - updateMessageSchema: validação uniforme com createMessageSchema
 
   const emptyRes = updateMessageSchema.safeParse({ body: { text: "" } });
   assert.equal(emptyRes.success, false);
+});
+
+// -------------------------------------------------------------
+// loginSchema & refreshTokenSchema (Fase 7)
+// -------------------------------------------------------------
+test("Fase 7 - loginSchema: aceita login e password válidos", () => {
+  const result = loginSchema.safeParse({
+    body: { login: "rwieruch", password: "password123" },
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data.body.login, "rwieruch");
+  assert.equal(result.data.body.password, "password123");
+});
+
+test("Fase 7 - loginSchema: rejeita ausência de login ou password", () => {
+  const noLogin = loginSchema.safeParse({ body: { password: "password123" } });
+  assert.equal(noLogin.success, false);
+
+  const noPassword = loginSchema.safeParse({ body: { login: "rwieruch" } });
+  assert.equal(noPassword.success, false);
+});
+
+test("Fase 7 - refreshTokenSchema: aceita token válido", () => {
+  const result = refreshTokenSchema.safeParse({
+    body: { refreshToken: "abcdef1234567890" },
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data.body.refreshToken, "abcdef1234567890");
+});
+
+test("Fase 7 - refreshTokenSchema: rejeita ausência de refreshToken", () => {
+  const result = refreshTokenSchema.safeParse({ body: {} });
+  assert.equal(result.success, false);
 });
