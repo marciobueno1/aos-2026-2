@@ -5,6 +5,10 @@ import { userService, messageService } from "../services/index.js";
 const PUBLIC_ROUTES = [
   { method: "GET", path: "/" },
   { method: "HEAD", path: "/" },
+  { method: "GET", path: "/api-docs" },
+  { method: "HEAD", path: "/api-docs" },
+  { method: "GET", path: "/api-docs.json" },
+  { method: "HEAD", path: "/api-docs.json" },
   { method: "POST", path: "/session" },
   { method: "POST", path: "/session/refresh" },
   { method: "DELETE", path: "/session" },
@@ -82,6 +86,7 @@ export const authMiddleware = async (req, res, next) => {
  * Bloqueia qualquer requisição não autenticada que tente acessar rotas restritas.
  * Mantém públicas estritamente:
  * - GET / e HEAD / (status do servidor)
+ * - GET /api-docs e GET /api-docs.json (documentação Swagger/OpenAPI)
  * - POST /session (login)
  * - POST /session/refresh (renovação com rotação de refresh token)
  * - DELETE /session (logout por refresh token)

@@ -140,3 +140,30 @@ export const refreshTokenSchema = z.object({
       .min(1, "Campo obrigatório"),
   }),
 });
+
+/**
+ * Schema de paginação e ordenação para endpoints de listagem.
+ * Valida page (1..1000000), limit (1..100) e order (ASC/DESC, case-insensitive).
+ */
+export const paginationQuerySchema = z.object({
+  query: z.object({
+    page: z.coerce
+      .number("Parâmetro page deve ser numérico.")
+      .int("Parâmetro page deve ser um número inteiro.")
+      .min(1, "Parâmetro page deve ser no mínimo 1.")
+      .max(1000000, "Parâmetro page deve ser no máximo 1000000.")
+      .default(1),
+    limit: z.coerce
+      .number("Parâmetro limit deve ser numérico.")
+      .int("Parâmetro limit deve ser um número inteiro.")
+      .min(1, "Parâmetro limit deve estar entre 1 e 100.")
+      .max(100, "Parâmetro limit deve estar entre 1 e 100.")
+      .default(10),
+    order: z
+      .enum(["ASC", "DESC", "asc", "desc"], {
+        error: "Parâmetro order deve ser 'ASC' ou 'DESC'.",
+      })
+      .transform((val) => val.toUpperCase())
+      .default("DESC"),
+  }),
+});

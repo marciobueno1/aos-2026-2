@@ -1,7 +1,12 @@
 import models from "../models/index.js";
+import { findPaginated } from "../utils/index.js";
 
-const getAllMessages = async () => {
-  return await models.Message.findAll();
+const getAllMessages = async ({
+  page = 1,
+  limit = 10,
+  order = "DESC",
+} = {}) => {
+  return await findPaginated(models.Message, { page, limit, order });
 };
 
 const getMessageById = async (id) => {

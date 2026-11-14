@@ -6,11 +6,12 @@ import {
   createMessageSchema,
   updateMessageSchema,
   messageIdParamSchema,
+  paginationQuerySchema,
 } from "../middlewares/index.js";
 
 const router = Router();
 
-router.get("/", messageController.getMessages);
+router.get("/", validate(paginationQuerySchema), messageController.getMessages);
 router.get(
   "/:messageId",
   validate(messageIdParamSchema),

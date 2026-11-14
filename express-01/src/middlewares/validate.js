@@ -25,7 +25,12 @@ const validate = (schema) => async (req, res, next) => {
       req.params = validated.params;
     }
     if (validated.query !== undefined) {
-      req.query = validated.query;
+      Object.defineProperty(req, "query", {
+        value: validated.query,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
     }
 
     return next();

@@ -1,9 +1,11 @@
 import { userService } from "../services/index.js";
-import { AppError } from "../utils/index.js";
+import { AppError, setPaginationHeaders } from "../utils/index.js";
 
 const getUsers = async (req, res) => {
-  const users = await userService.getAllUsers();
-  return res.status(200).send(users);
+  const { page = 1, limit = 10, order = "DESC" } = req.query || {};
+  const result = await userService.getAllUsers({ page, limit, order });
+  setPaginationHeaders(res, result.meta);
+  return res.status(200).send(result.data);
 };
 
 const getUser = async (req, res) => {

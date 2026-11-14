@@ -7,11 +7,17 @@ import {
   createUserSchema,
   updateUserSchema,
   userIdParamSchema,
+  paginationQuerySchema,
 } from "../middlewares/index.js";
 
 const router = Router();
 
-router.get("/", restrictTo("ADMIN"), userController.getUsers);
+router.get(
+  "/",
+  restrictTo("ADMIN"),
+  validate(paginationQuerySchema),
+  userController.getUsers
+);
 router.get(
   "/:userId",
   validate(userIdParamSchema),

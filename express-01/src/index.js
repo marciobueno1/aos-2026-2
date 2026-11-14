@@ -24,8 +24,8 @@ app.set("trust proxy", 1);
 app.use(helmet());
 app.use(corsMiddleware);
 app.use(limiterMiddleware);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(logMiddleware);
 app.use(authMiddleware);
 app.use(protectRoutes);
@@ -34,6 +34,7 @@ app.use(protectRoutes);
 app.get("/", (req, res) => {
   return res.send("Servidor express executando...");
 });
+app.use("/", routes.docs);
 app.use("/session", routes.session);
 app.use("/users", routes.user);
 app.use("/messages", routes.message);

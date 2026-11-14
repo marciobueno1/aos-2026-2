@@ -62,6 +62,31 @@ const errorMiddleware = (err, req, res, next) => {
     });
   }
 
+  if (
+    err.type === "entity.too.large" ||
+    err.status === 413 ||
+    err.statusCode === 413
+  ) {
+    return res.status(413).send({
+      status: "fail",
+      message:
+        "Payload da requisição excede o limite máximo permitido (10kb).",
+      ...(isDev && { stack: err.stack }),
+    });
+  }
+
+  if (
+    err instanceof SyntaxError &&
+    (err.status === 400 || err.statusCode === 400) &&
+    "body" in err
+  ) {
+    return res.status(400).send({
+      status: "fail",
+      message: "JSON malformado no corpo da requisição.",
+      ...(isDev && { stack: err.stack }),
+    });
+  }
+
   return res.status(500).send({
     status: "error",
     message: isDev ? err.message : "Algo deu errado no servidor.",

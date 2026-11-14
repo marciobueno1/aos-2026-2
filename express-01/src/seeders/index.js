@@ -1,3 +1,4 @@
+import "dotenv/config";
 import models, { sequelize } from "../models/index.js";
 import {
   INITIAL_USERS,
@@ -32,10 +33,40 @@ export const createUsersWithMessages = async () => {
   });
 };
 
+/**
+ * Executa o seeder inicial via CLI com logging e fechamento seguro da conexão.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.closeConnection=true]
+ * @param {{ log: Function, error: Function }} [options.logger=console]
+ * @returns {Promise<Array | undefined>}
+ */
+export const runSeeders = async ({
+  closeConnection = true,
+  logger = console,
+} = {}) => {
+  try {
+    const users = await createUsersWithMessages();
+    logger.log(
+      `[seeders] ${users.length} usuário(s) inicial(is) populado(s) com sucesso.`
+    );
+    return users;
+  } catch (error) {
+    process.exitCode = 1;
+    logger.error("[seeders] Falha ao popular banco de dados:", error);
+    return undefined;
+  } finally {
+    if (closeConnection) {
+      await sequelize.close();
+    }
+  }
+};
+
 export { up, down };
 
 export default {
   createUsersWithMessages,
+  runSeeders,
   up,
   down,
 };

@@ -1,9 +1,9 @@
 import models, { sequelize } from "../models/index.js";
 import sessionService from "./sessionService.js";
-import { AppError } from "../utils/index.js";
+import { AppError, findPaginated } from "../utils/index.js";
 
-const getAllUsers = async () => {
-  return await models.User.findAll();
+const getAllUsers = async ({ page = 1, limit = 10, order = "DESC" } = {}) => {
+  return await findPaginated(models.User, { page, limit, order });
 };
 
 const getUserById = async (id, options = {}) => {

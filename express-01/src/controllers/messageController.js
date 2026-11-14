@@ -1,9 +1,11 @@
 import { messageService } from "../services/index.js";
-import { AppError } from "../utils/index.js";
+import { AppError, setPaginationHeaders } from "../utils/index.js";
 
 const getMessages = async (req, res) => {
-  const messages = await messageService.getAllMessages();
-  return res.status(200).send(messages);
+  const { page = 1, limit = 10, order = "DESC" } = req.query || {};
+  const result = await messageService.getAllMessages({ page, limit, order });
+  setPaginationHeaders(res, result.meta);
+  return res.status(200).send(result.data);
 };
 
 const getMessage = async (req, res) => {
