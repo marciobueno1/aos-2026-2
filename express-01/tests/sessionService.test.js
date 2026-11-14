@@ -6,7 +6,7 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "supersecretpassword123";
 
 import sessionService from "../src/services/sessionService.js";
-import models from "../src/models/index.js";
+import models, { sequelize } from "../src/models/index.js";
 import { AppError } from "../src/utils/index.js";
 
 test("Fase 7 - sessionService: createAccessToken gera JWT válido com claims do usuário", () => {
@@ -69,7 +69,15 @@ test("Fase 7 - sessionService: authenticate lança AppError 401 quando senha est
 
 test("Fase 7 - sessionService: rotateRefreshToken rejeita token inexistente com 401", async () => {
   const originalFindOne = models.RefreshToken.findOne;
-  models.RefreshToken.findOne = async () => null;
+  const originalTransaction = sequelize.transaction;
+  const mockTx = { id: "tx-missing", LOCK: { UPDATE: "UPDATE" } };
+  let findOneOpts = null;
+
+  sequelize.transaction = async (callback) => await callback(mockTx);
+  models.RefreshToken.findOne = async (opts) => {
+    findOneOpts = opts;
+    return null;
+  };
 
   try {
     await assert.rejects(
@@ -84,19 +92,34 @@ test("Fase 7 - sessionService: rotateRefreshToken rejeita token inexistente com 
         );
       }
     );
+    assert.equal(findOneOpts.transaction, mockTx);
+    assert.deepEqual(findOneOpts.lock, {
+      level: "UPDATE",
+      of: models.RefreshToken,
+    });
   } finally {
     models.RefreshToken.findOne = originalFindOne;
+    sequelize.transaction = originalTransaction;
   }
 });
 
 test("Fase 7 - sessionService: rotateRefreshToken rejeita token expirado com 401 e remove do banco", async () => {
-  let destroyed = false;
+  let destroyedOpts = null;
+  let txCommitted = false;
   const originalFindOne = models.RefreshToken.findOne;
+  const originalTransaction = sequelize.transaction;
+  const mockTx = { id: "tx-expired", LOCK: { UPDATE: "UPDATE" } };
+
+  sequelize.transaction = async (callback) => {
+    const res = await callback(mockTx);
+    txCommitted = true;
+    return res;
+  };
   models.RefreshToken.findOne = async () => ({
     token: "token_expirado",
     expiresAt: new Date(Date.now() - 60000), // Expirou há 1 minuto
-    destroy: async () => {
-      destroyed = true;
+    destroy: async (opts) => {
+      destroyedOpts = opts;
     },
   });
 
@@ -113,9 +136,11 @@ test("Fase 7 - sessionService: rotateRefreshToken rejeita token expirado com 401
         );
       }
     );
-    assert.equal(destroyed, true, "Token expirado deve ser destruído no banco");
+    assert.equal(destroyedOpts?.transaction, mockTx, "Token expirado deve ser destruído na transação");
+    assert.equal(txCommitted, true, "Exclusão de token expirado deve ser confirmada (commit)");
   } finally {
     models.RefreshToken.findOne = originalFindOne;
+    sequelize.transaction = originalTransaction;
   }
 });
 
@@ -156,33 +181,51 @@ test("Fase 7 - sessionService: authenticate gera tokens e persiste hash SHA-256 
 
 test("Fase 7 - sessionService: rotateRefreshToken rotaciona token validado preservando expiresAt", async () => {
   const originalFindOne = models.RefreshToken.findOne;
+  const originalFindByPk = models.User.findByPk;
   const originalDestroy = models.RefreshToken.destroy;
   const originalCreate = models.RefreshToken.create;
+  const originalTransaction = sequelize.transaction;
 
   const futureDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
   const mockUser = {
     id: "user-uuid-2",
     username: "bob",
     email: "bob@unicap.br",
+    role: "USER",
   };
+  const lockedUser = {
+    ...mockUser,
+    role: "ADMIN",
+  };
+  const mockTx = { id: "tx-rotate-1", LOCK: { UPDATE: "UPDATE" } };
   let queriedHash = null;
-  let destroyedWhere = null;
+  let findOneOpts = null;
+  let findByPkArgs = null;
+  let destroyedOptions = null;
   let createdRecord = null;
+  let createdOptions = null;
 
-  models.RefreshToken.findOne = async ({ where }) => {
-    queriedHash = where.token;
+  sequelize.transaction = async (callback) => await callback(mockTx);
+  models.RefreshToken.findOne = async (opts) => {
+    findOneOpts = opts;
+    queriedHash = opts.where.token;
     return {
       id: "rt-uuid-1",
       expiresAt: futureDate,
       user: mockUser,
     };
   };
-  models.RefreshToken.destroy = async ({ where }) => {
-    destroyedWhere = where;
+  models.User.findByPk = async (id, opts) => {
+    findByPkArgs = { id, opts };
+    return lockedUser;
+  };
+  models.RefreshToken.destroy = async (options) => {
+    destroyedOptions = options;
     return 1;
   };
-  models.RefreshToken.create = async (data) => {
+  models.RefreshToken.create = async (data, options) => {
     createdRecord = data;
+    createdOptions = options;
     return data;
   };
 
@@ -191,11 +234,23 @@ test("Fase 7 - sessionService: rotateRefreshToken rotaciona token validado prese
     const result = await sessionService.rotateRefreshToken(oldToken);
 
     assert.equal(queriedHash, sessionService.hashRefreshToken(oldToken));
-    assert.deepEqual(destroyedWhere, { id: "rt-uuid-1" });
+    assert.equal(findOneOpts.transaction, mockTx);
+    assert.deepEqual(findOneOpts.lock, {
+      level: "UPDATE",
+      of: models.RefreshToken,
+    });
+    assert.equal(findByPkArgs.id, mockUser.id);
+    assert.deepEqual(findByPkArgs.opts, {
+      transaction: mockTx,
+      lock: "UPDATE",
+    });
+    assert.deepEqual(destroyedOptions.where, { id: "rt-uuid-1" });
+    assert.equal(destroyedOptions.transaction, mockTx);
+    assert.equal(createdOptions.transaction, mockTx);
     assert.ok(result.accessToken);
     assert.equal(result.refreshToken.length, 80);
     assert.notEqual(result.refreshToken, oldToken);
-    assert.equal(result.user, mockUser);
+    assert.equal(result.user, lockedUser);
     assert.equal(createdRecord.expiresAt, futureDate);
     assert.equal(
       createdRecord.token,
@@ -203,21 +258,32 @@ test("Fase 7 - sessionService: rotateRefreshToken rotaciona token validado prese
     );
   } finally {
     models.RefreshToken.findOne = originalFindOne;
+    models.User.findByPk = originalFindByPk;
     models.RefreshToken.destroy = originalDestroy;
     models.RefreshToken.create = originalCreate;
+    sequelize.transaction = originalTransaction;
   }
 });
 
 test("Fase 7 - sessionService: rotateRefreshToken bloqueia corrida concorrente quando destroy retorna 0", async () => {
   const originalFindOne = models.RefreshToken.findOne;
+  const originalFindByPk = models.User.findByPk;
   const originalDestroy = models.RefreshToken.destroy;
+  const originalTransaction = sequelize.transaction;
+  const mockTx = { id: "tx-rotate-race", LOCK: { UPDATE: "UPDATE" } };
+  let destroyedTx = null;
 
+  sequelize.transaction = async (callback) => await callback(mockTx);
   models.RefreshToken.findOne = async () => ({
     id: "rt-uuid-race",
     expiresAt: new Date(Date.now() + 60000),
     user: { id: "u-1", username: "bob", email: "bob@unicap.br" },
   });
-  models.RefreshToken.destroy = async () => 0;
+  models.User.findByPk = async () => null;
+  models.RefreshToken.destroy = async (options) => {
+    destroyedTx = options.transaction;
+    return 0;
+  };
 
   try {
     await assert.rejects(
@@ -226,9 +292,12 @@ test("Fase 7 - sessionService: rotateRefreshToken bloqueia corrida concorrente q
       },
       (err) => err instanceof AppError && err.statusCode === 401
     );
+    assert.equal(destroyedTx, mockTx);
   } finally {
     models.RefreshToken.findOne = originalFindOne;
+    models.User.findByPk = originalFindByPk;
     models.RefreshToken.destroy = originalDestroy;
+    sequelize.transaction = originalTransaction;
   }
 });
 

@@ -13,7 +13,7 @@ import {
   messageService,
   sessionService,
 } from "../src/services/index.js";
-import models from "../src/models/index.js";
+import models, { sequelize } from "../src/models/index.js";
 import { AppError } from "../src/utils/index.js";
 
 const createMockRes = () => {
@@ -242,23 +242,34 @@ test("Fase 8 - userService.updateUser: revoga refresh tokens quando ADMIN altera
   const originalFindByPk = models.User.findByPk;
   const originalDestroyUserRefreshTokens =
     sessionService.destroyUserRefreshTokens;
+  const originalTransaction = sequelize.transaction;
 
+  const mockTx = { id: "tx-role-change", LOCK: { UPDATE: "UPDATE" } };
+  let findByPkOpts = null;
   let revokedUserId = null;
+  let revokedOptions = null;
   let updatedFields = null;
+  let updatedOptions = null;
 
   const mockUserInstance = {
     id: "u-1",
     username: "alice",
     role: "USER",
-    async update(fields) {
+    async update(fields, options) {
       updatedFields = fields;
+      updatedOptions = options;
       return { ...this, ...fields };
     },
   };
 
-  models.User.findByPk = async (id) => (id === "u-1" ? mockUserInstance : null);
-  sessionService.destroyUserRefreshTokens = async (userId) => {
+  sequelize.transaction = async (callback) => await callback(mockTx);
+  models.User.findByPk = async (id, opts) => {
+    findByPkOpts = opts;
+    return id === "u-1" ? mockUserInstance : null;
+  };
+  sessionService.destroyUserRefreshTokens = async (userId, options) => {
     revokedUserId = userId;
+    revokedOptions = options;
   };
 
   try {
@@ -269,11 +280,15 @@ test("Fase 8 - userService.updateUser: revoga refresh tokens quando ADMIN altera
     );
 
     assert.equal(updated.role, "ADMIN");
+    assert.deepEqual(findByPkOpts, { transaction: mockTx, lock: "UPDATE" });
     assert.deepEqual(updatedFields, { role: "ADMIN" });
+    assert.equal(updatedOptions?.transaction, mockTx);
     assert.equal(revokedUserId, "u-1");
+    assert.equal(revokedOptions?.transaction, mockTx);
   } finally {
     models.User.findByPk = originalFindByPk;
     sessionService.destroyUserRefreshTokens = originalDestroyUserRefreshTokens;
+    sequelize.transaction = originalTransaction;
   }
 });
 
@@ -281,21 +296,30 @@ test("Fase 8 - userService.updateUser: não revoga refresh tokens quando ADMIN e
   const originalFindByPk = models.User.findByPk;
   const originalDestroyUserRefreshTokens =
     sessionService.destroyUserRefreshTokens;
+  const originalTransaction = sequelize.transaction;
 
+  const mockTx = { id: "tx-same-role", LOCK: { UPDATE: "UPDATE" } };
+  let findByPkOpts = null;
   let revokeCalled = false;
   let updatedFields = null;
+  let updatedOptions = null;
 
   const mockUserInstance = {
     id: "u-1",
     username: "alice",
     role: "USER",
-    async update(fields) {
+    async update(fields, options) {
       updatedFields = fields;
+      updatedOptions = options;
       return { ...this, ...fields };
     },
   };
 
-  models.User.findByPk = async (id) => (id === "u-1" ? mockUserInstance : null);
+  sequelize.transaction = async (callback) => await callback(mockTx);
+  models.User.findByPk = async (id, opts) => {
+    findByPkOpts = opts;
+    return id === "u-1" ? mockUserInstance : null;
+  };
   sessionService.destroyUserRefreshTokens = async () => {
     revokeCalled = true;
   };
@@ -309,11 +333,14 @@ test("Fase 8 - userService.updateUser: não revoga refresh tokens quando ADMIN e
 
     assert.equal(updated.username, "alice_edit");
     assert.equal(updated.role, "USER");
+    assert.deepEqual(findByPkOpts, { transaction: mockTx, lock: "UPDATE" });
     assert.deepEqual(updatedFields, { username: "alice_edit", role: "USER" });
+    assert.equal(updatedOptions?.transaction, mockTx);
     assert.equal(revokeCalled, false);
   } finally {
     models.User.findByPk = originalFindByPk;
     sessionService.destroyUserRefreshTokens = originalDestroyUserRefreshTokens;
+    sequelize.transaction = originalTransaction;
   }
 });
 
@@ -321,29 +348,44 @@ test("Fase 8 - userService.updateUser: revoga refresh tokens quando password é 
   const originalFindByPk = models.User.findByPk;
   const originalDestroyUserRefreshTokens =
     sessionService.destroyUserRefreshTokens;
+  const originalTransaction = sequelize.transaction;
 
+  const mockTx = { id: "tx-pw-change", LOCK: { UPDATE: "UPDATE" } };
+  let findByPkOpts = null;
   let revokedUserId = null;
+  let revokedOptions = null;
+  let updatedOptions = null;
 
   const mockUserInstance = {
     id: "u-1",
     username: "alice",
     role: "USER",
-    async update(fields) {
+    async update(fields, options) {
+      updatedOptions = options;
       return { ...this, ...fields };
     },
   };
 
-  models.User.findByPk = async (id) => (id === "u-1" ? mockUserInstance : null);
-  sessionService.destroyUserRefreshTokens = async (userId) => {
+  sequelize.transaction = async (callback) => await callback(mockTx);
+  models.User.findByPk = async (id, opts) => {
+    findByPkOpts = opts;
+    return id === "u-1" ? mockUserInstance : null;
+  };
+  sessionService.destroyUserRefreshTokens = async (userId, options) => {
     revokedUserId = userId;
+    revokedOptions = options;
   };
 
   try {
     await userService.updateUser("u-1", { password: "newpassword123" });
+    assert.deepEqual(findByPkOpts, { transaction: mockTx, lock: "UPDATE" });
+    assert.equal(updatedOptions?.transaction, mockTx);
     assert.equal(revokedUserId, "u-1");
+    assert.equal(revokedOptions?.transaction, mockTx);
   } finally {
     models.User.findByPk = originalFindByPk;
     sessionService.destroyUserRefreshTokens = originalDestroyUserRefreshTokens;
+    sequelize.transaction = originalTransaction;
   }
 });
 
@@ -351,21 +393,30 @@ test("Fase 8 - userService.updateUser: não revoga refresh tokens quando apenas 
   const originalFindByPk = models.User.findByPk;
   const originalDestroyUserRefreshTokens =
     sessionService.destroyUserRefreshTokens;
+  const originalTransaction = sequelize.transaction;
 
+  const mockTx = { id: "tx-username-only", LOCK: { UPDATE: "UPDATE" } };
+  let findByPkOpts = null;
   let revokeCalled = false;
   let updatedFields = null;
+  let updatedOptions = null;
 
   const mockUserInstance = {
     id: "u-1",
     username: "alice",
     role: "USER",
-    async update(fields) {
+    async update(fields, options) {
       updatedFields = fields;
+      updatedOptions = options;
       return { ...this, ...fields };
     },
   };
 
-  models.User.findByPk = async (id) => (id === "u-1" ? mockUserInstance : null);
+  sequelize.transaction = async (callback) => await callback(mockTx);
+  models.User.findByPk = async (id, opts) => {
+    findByPkOpts = opts;
+    return id === "u-1" ? mockUserInstance : null;
+  };
   sessionService.destroyUserRefreshTokens = async () => {
     revokeCalled = true;
   };
@@ -374,10 +425,13 @@ test("Fase 8 - userService.updateUser: não revoga refresh tokens quando apenas 
     const updated = await userService.updateUser("u-1", { username: "novo" });
 
     assert.equal(updated.username, "novo");
+    assert.deepEqual(findByPkOpts, { transaction: mockTx, lock: "UPDATE" });
     assert.deepEqual(updatedFields, { username: "novo" });
+    assert.equal(updatedOptions?.transaction, mockTx);
     assert.equal(revokeCalled, false);
   } finally {
     models.User.findByPk = originalFindByPk;
     sessionService.destroyUserRefreshTokens = originalDestroyUserRefreshTokens;
+    sequelize.transaction = originalTransaction;
   }
 });

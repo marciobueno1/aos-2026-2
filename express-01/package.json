@@ -7,7 +7,8 @@
     "dev": "nodemon --exec babel-node src/index.js",
     "build": "babel src -d dist",
     "start": "node dist/index.js",
-    "test": "NODE_ENV=test node --test tests/**/*.test.js"
+    "test": "NODE_ENV=test node --test tests/**/*.test.js",
+    "db:clean-tokens": "node -e 'import(\"./src/utils/tokenCleanup.js\")'"
   },
   "keywords": [
     "express",

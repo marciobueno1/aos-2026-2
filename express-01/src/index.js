@@ -3,7 +3,8 @@ import "./utils/env.js";
 import express from "express";
 import helmet from "helmet";
 import { env } from "./utils/index.js";
-import models, { sequelize } from "./models/index.js";
+import { sequelize } from "./models/index.js";
+import { createUsersWithMessages } from "./seeders/index.js";
 import {
   corsMiddleware,
   logMiddleware,
@@ -63,44 +64,5 @@ if (syncDatabase) {
 } else {
   startServer();
 }
-
-const createUsersWithMessages = async () => {
-  await models.User.create(
-    {
-      username: "rwieruch",
-      email: "rwieruch@email.com",
-      password: "password123",
-      role: "ADMIN",
-      messages: [
-        {
-          text: "Published the Road to learn React",
-        },
-      ],
-    },
-    {
-      include: [models.Message],
-    },
-  );
-
-  await models.User.create(
-    {
-      username: "ddavids",
-      email: "ddavids@email.com",
-      password: "password456",
-      role: "USER",
-      messages: [
-        {
-          text: "Happy to release ...",
-        },
-        {
-          text: "Published a complete ...",
-        },
-      ],
-    },
-    {
-      include: [models.Message],
-    },
-  );
-};
 
 export default app;

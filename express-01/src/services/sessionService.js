@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import models from "../models/index.js";
+import models, { sequelize } from "../models/index.js";
 import { env, AppError } from "../utils/index.js";
 
 const hashRefreshToken = (token) =>
@@ -19,7 +19,15 @@ const createAccessToken = (user) => {
   );
 };
 
-const createRefreshToken = async (userId, originalExpiresAt = null) => {
+/**
+ * Gera e persiste um refresh token opaco associado ao usuário.
+ * Aceita uma transação opcional para composição atômica em operações compostas.
+ */
+const createRefreshToken = async (
+  userId,
+  originalExpiresAt = null,
+  options = {}
+) => {
   const token = crypto.randomBytes(40).toString("hex");
   let expiresAt = originalExpiresAt;
   if (!expiresAt) {
@@ -27,11 +35,16 @@ const createRefreshToken = async (userId, originalExpiresAt = null) => {
     expiresAt.setDate(expiresAt.getDate() + 7);
   }
 
-  await models.RefreshToken.create({
-    token: hashRefreshToken(token),
-    expiresAt,
-    userId,
-  });
+  await models.RefreshToken.create(
+    {
+      token: hashRefreshToken(token),
+      expiresAt,
+      userId,
+    },
+    {
+      ...(options.transaction && { transaction: options.transaction }),
+    }
+  );
 
   return { token, expiresAt };
 };
@@ -58,42 +71,61 @@ const authenticate = async (login, password) => {
 };
 
 const rotateRefreshToken = async (oldRefreshToken) => {
-  const dbToken = await models.RefreshToken.findOne({
-    where: { token: hashRefreshToken(oldRefreshToken) },
-    include: [models.User],
-  });
+  const result = await sequelize.transaction(async (t) => {
+    const dbToken = await models.RefreshToken.findOne({
+      where: { token: hashRefreshToken(oldRefreshToken) },
+      include: [models.User],
+      transaction: t,
+      ...(t?.LOCK?.UPDATE && {
+        lock: { level: t.LOCK.UPDATE, of: models.RefreshToken },
+      }),
+    });
 
-  if (!dbToken || new Date(dbToken.expiresAt) < new Date()) {
-    if (dbToken) {
-      await dbToken.destroy();
+    if (!dbToken || new Date(dbToken.expiresAt) < new Date() || !dbToken.user) {
+      if (dbToken) {
+        await dbToken.destroy({ transaction: t });
+      }
+      return { invalidOrExpired: true };
     }
-    throw new AppError("Refresh token inválido ou expirado.", 401);
-  }
 
-  const user = dbToken.user;
-  if (!user) {
-    await dbToken.destroy();
-    throw new AppError("Refresh token inválido ou expirado.", 401);
-  }
+    const originalExpiresAt = dbToken.expiresAt;
+    const lockedUser =
+      t?.LOCK?.UPDATE && dbToken.user?.id
+        ? await models.User.findByPk(dbToken.user.id, {
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+          })
+        : null;
+    const user = lockedUser || dbToken.user;
 
-  const originalExpiresAt = dbToken.expiresAt;
+    // Token Rotation atômica: garante que remoção do antigo e criação do novo ocorram na mesma transação
+    const deletedCount = await models.RefreshToken.destroy({
+      where: { id: dbToken.id },
+      transaction: t,
+    });
+    if (deletedCount === 0) {
+      throw new AppError("Refresh token inválido ou expirado.", 401);
+    }
 
-  // Token Rotation: remove o token consumido de forma atômica para evitar reuso concorrente
-  const deletedCount = await models.RefreshToken.destroy({
-    where: { id: dbToken.id },
+    const accessToken = createAccessToken(user);
+    const newRefreshToken = await createRefreshToken(
+      user.id,
+      originalExpiresAt,
+      { transaction: t }
+    );
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken.token,
+      user,
+    };
   });
-  if (deletedCount === 0) {
+
+  if (result?.invalidOrExpired) {
     throw new AppError("Refresh token inválido ou expirado.", 401);
   }
 
-  const accessToken = createAccessToken(user);
-  const newRefreshToken = await createRefreshToken(user.id, originalExpiresAt);
-
-  return {
-    accessToken,
-    refreshToken: newRefreshToken.token,
-    user,
-  };
+  return result;
 };
 
 const destroyRefreshToken = async (token) => {
@@ -103,10 +135,15 @@ const destroyRefreshToken = async (token) => {
   });
 };
 
-const destroyUserRefreshTokens = async (userId) => {
+/**
+ * Revoga todos os refresh tokens ativos de um usuário.
+ * Aceita uma transação opcional para manter atomicidade com mutações no usuário.
+ */
+const destroyUserRefreshTokens = async (userId, options = {}) => {
   if (!userId) return;
   await models.RefreshToken.destroy({
     where: { userId },
+    ...(options.transaction && { transaction: options.transaction }),
   });
 };
 
