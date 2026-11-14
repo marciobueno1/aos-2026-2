@@ -24,7 +24,7 @@ export const createUserSchema = z.object({
 
 /**
  * Schema de atualização de usuário.
- * Permite atualização parcial de username, email e/ou password,
+ * Permite atualização parcial de username, email, password e/ou role (restrito a ADMIN no controller),
  * exigindo que ao menos um campo seja enviado.
  */
 export const updateUserSchema = z.object({
@@ -45,15 +45,21 @@ export const updateUserSchema = z.object({
         .min(7, "A senha deve ter entre 7 e 42 caracteres.")
         .max(42, "A senha deve ter entre 7 e 42 caracteres.")
         .optional(),
+      role: z
+        .enum(["USER", "ADMIN"], {
+          error: "Perfil de acesso inválido. Valores permitidos: USER, ADMIN.",
+        })
+        .optional(),
     })
     .refine(
       (data) =>
         data.username !== undefined ||
         data.email !== undefined ||
-        data.password !== undefined,
+        data.password !== undefined ||
+        data.role !== undefined,
       {
         message:
-          "Ao menos um campo (username, email ou password) deve ser fornecido para atualização.",
+          "Ao menos um campo (username, email, password ou role) deve ser fornecido para atualização.",
       }
     ),
 });

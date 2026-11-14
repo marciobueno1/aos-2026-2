@@ -145,10 +145,40 @@ test("Fase 6/7 - updateUserSchema: rejeita payload vazio com mensagem explicativ
   assert.equal(result.success, false);
   assert.equal(
     result.error.issues.some((i) =>
-      i.message.includes("Ao menos um campo (username, email ou password) deve ser fornecido")
+      i.message.includes(
+        "Ao menos um campo (username, email, password ou role) deve ser fornecido"
+      )
     ),
     true
   );
+});
+
+test("Fase 8 - updateUserSchema: aceita role 'USER' ou 'ADMIN' e rejeita valores inválidos", () => {
+  const adminRole = updateUserSchema.safeParse({ body: { role: "ADMIN" } });
+  assert.equal(adminRole.success, true);
+  assert.equal(adminRole.data.body.role, "ADMIN");
+
+  const userRole = updateUserSchema.safeParse({ body: { role: "USER" } });
+  assert.equal(userRole.success, true);
+  assert.equal(userRole.data.body.role, "USER");
+
+  const invalidRole = updateUserSchema.safeParse({
+    body: { role: "SUPERADMIN" },
+  });
+  assert.equal(invalidRole.success, false);
+});
+
+test("Fase 8 - createUserSchema: remove role indevido no payload de cadastro", () => {
+  const result = createUserSchema.safeParse({
+    body: {
+      username: "alice",
+      email: "alice@unicap.br",
+      password: "password123",
+      role: "ADMIN",
+    },
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data.body.role, undefined);
 });
 
 test("Fase 6/7 - updateUserSchema: rejeita username vazio e email inválido", () => {

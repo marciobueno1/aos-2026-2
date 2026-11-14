@@ -14,6 +14,7 @@ test("Fase 7 - sessionService: createAccessToken gera JWT válido com claims do 
     id: "user-123",
     username: "alice",
     email: "alice@unicap.br",
+    role: "ADMIN",
   };
 
   const token = sessionService.createAccessToken(user);
@@ -23,6 +24,7 @@ test("Fase 7 - sessionService: createAccessToken gera JWT válido com claims do 
   assert.equal(decoded.id, user.id);
   assert.equal(decoded.username, user.username);
   assert.equal(decoded.email, user.email);
+  assert.equal(decoded.role, user.role);
   // Verifica expiração (~15 minutos a partir do iat)
   assert.ok(decoded.exp - decoded.iat <= 15 * 60);
 });

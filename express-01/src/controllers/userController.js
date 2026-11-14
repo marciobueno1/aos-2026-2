@@ -25,12 +25,26 @@ const createUser = async (req, res) => {
 };
 
 const updateUser = async (req, res) => {
-  const { username, email, password } = req.body || {};
-  const user = await userService.updateUser(req.params.userId, {
-    username,
-    email,
-    password,
-  });
+  const { username, email, password, role } = req.body || {};
+  const me = req.context?.me;
+
+  if (role !== undefined && me?.role !== "ADMIN") {
+    throw new AppError(
+      "Apenas administradores podem alterar perfis de acesso.",
+      403
+    );
+  }
+
+  const user = await userService.updateUser(
+    req.params.userId,
+    {
+      username,
+      email,
+      password,
+      ...(role !== undefined && { role }),
+    },
+    me
+  );
   if (!user) {
     throw new AppError("Usuário não encontrado.", 404);
   }

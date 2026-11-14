@@ -118,3 +118,26 @@ test("Fase 7 - Modelo User: senha falsa começando com '$argon2' NÃO burla hash
   assert.ok(fakeShortUser.password.startsWith("$argon2id$v="));
   assert.equal(await fakeShortUser.validatePassword("$argon2fake"), true);
 });
+
+test("Fase 8 - Modelo User: define role padrão 'USER', aceita 'ADMIN' e preserva role em toJSON()", () => {
+  const defaultUser = User.build({
+    id: "123e4567-e89b-12d3-a456-426614174000",
+    username: "comum",
+    email: "comum@unicap.br",
+    password: "password123",
+  });
+  assert.equal(defaultUser.role, "USER");
+  assert.equal(defaultUser.toJSON().role, "USER");
+  assert.equal(defaultUser.toJSON().password, undefined);
+
+  const adminUser = User.build({
+    id: "123e4567-e89b-12d3-a456-426614174001",
+    username: "admin",
+    email: "admin@unicap.br",
+    password: "password123",
+    role: "ADMIN",
+  });
+  assert.equal(adminUser.role, "ADMIN");
+  assert.equal(adminUser.toJSON().role, "ADMIN");
+  assert.equal(adminUser.toJSON().password, undefined);
+});

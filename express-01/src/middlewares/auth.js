@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { env, AppError } from "../utils/index.js";
-import { userService } from "../services/index.js";
+import { userService, messageService } from "../services/index.js";
 
 const PUBLIC_ROUTES = [
   { method: "GET", path: "/" },
@@ -102,7 +102,90 @@ export const protectRoutes = (req, res, next) => {
   return next();
 };
 
+/**
+ * Middleware de Controle de Acesso Baseado em Papéis (RBAC):
+ * Restringe o acesso da rota aos papéis especificados.
+ * Requer que `req.context.me` esteja autenticado.
+ *
+ * @param {...string} roles - Papéis autorizados (ex: "ADMIN", "USER")
+ * @returns {import("express").RequestHandler}
+ */
+export const restrictTo = (...roles) => {
+  return (req, res, next) => {
+    const me = req.context?.me;
+    if (!me || !roles.includes(me.role)) {
+      return next(
+        new AppError("Você não tem permissão para executar esta ação.", 403)
+      );
+    }
+
+    return next();
+  };
+};
+
+/**
+ * Middleware de Validação de Propriedade de Mensagem:
+ * Permite alteração/exclusão apenas ao autor da mensagem ou a um ADMIN.
+ * Anexa a mensagem encontrada em `req.message` para evitar consultas duplicadas.
+ */
+export const isMessageOwner = async (req, res, next) => {
+  try {
+    const me = req.context?.me;
+    if (!me) {
+      return next(
+        new AppError("Acesso não autorizado. Autenticação obrigatória.", 401)
+      );
+    }
+
+    const message = await messageService.getMessageById(req.params.messageId);
+    if (!message) {
+      return next(new AppError("Mensagem não encontrada.", 404));
+    }
+
+    if (message.userId !== me.id && me.role !== "ADMIN") {
+      return next(
+        new AppError(
+          "Você não tem permissão para alterar ou remover mensagens de outros usuários.",
+          403
+        )
+      );
+    }
+
+    req.message = message;
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+};
+
+/**
+ * Middleware de Validação de Propriedade de Usuário:
+ * Permite consulta/alteração/exclusão de cadastro apenas ao próprio titular ou a um ADMIN.
+ */
+export const isUserOwner = (req, res, next) => {
+  const me = req.context?.me;
+  if (!me) {
+    return next(
+      new AppError("Acesso não autorizado. Autenticação obrigatória.", 401)
+    );
+  }
+
+  if (req.params.userId !== me.id && me.role !== "ADMIN") {
+    return next(
+      new AppError(
+        "Você não tem permissão para modificar o cadastro de outro usuário.",
+        403
+      )
+    );
+  }
+
+  return next();
+};
+
 export default {
   authMiddleware,
   protectRoutes,
+  restrictTo,
+  isMessageOwner,
+  isUserOwner,
 };

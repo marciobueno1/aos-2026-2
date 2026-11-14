@@ -1,5 +1,6 @@
 import models from "../models/index.js";
 import sessionService from "./sessionService.js";
+import { AppError } from "../utils/index.js";
 
 const getAllUsers = async () => {
   return await models.User.findAll();
@@ -21,18 +22,33 @@ const createUser = async ({ username, email, password }) => {
   });
 };
 
-const updateUser = async (id, { username, email, password }) => {
+const updateUser = async (
+  id,
+  { username, email, password, role },
+  actor = null
+) => {
+  if (role !== undefined && actor?.role !== "ADMIN") {
+    throw new AppError(
+      "Apenas administradores podem alterar perfis de acesso.",
+      403
+    );
+  }
+
   const user = await getUserById(id);
   if (!user) {
     return null;
   }
+
+  const roleChanged = role !== undefined && user.role !== role;
+
   const updatedUser = await user.update({
     ...(username !== undefined && { username }),
     ...(email !== undefined && { email }),
     ...(password !== undefined && { password }),
+    ...(role !== undefined && { role }),
   });
 
-  if (password !== undefined) {
+  if (password !== undefined || roleChanged) {
     await sessionService.destroyUserRefreshTokens(id);
   }
 

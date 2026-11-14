@@ -8,7 +8,12 @@ const hashRefreshToken = (token) =>
 
 const createAccessToken = (user) => {
   return jwt.sign(
-    { id: user.id, username: user.username, email: user.email },
+    {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    },
     env.JWT_SECRET,
     { expiresIn: "15m", algorithm: "HS256" }
   );

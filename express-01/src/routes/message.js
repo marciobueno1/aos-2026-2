@@ -2,6 +2,7 @@ import { Router } from "express";
 import { messageController } from "../controllers/index.js";
 import {
   validate,
+  isMessageOwner,
   createMessageSchema,
   updateMessageSchema,
   messageIdParamSchema,
@@ -24,11 +25,13 @@ router.put(
   "/:messageId",
   validate(messageIdParamSchema),
   validate(updateMessageSchema),
+  isMessageOwner,
   messageController.updateMessage
 );
 router.delete(
   "/:messageId",
   validate(messageIdParamSchema),
+  isMessageOwner,
   messageController.deleteMessage
 );
 

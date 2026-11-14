@@ -30,9 +30,11 @@ const createMessage = async (req, res) => {
 
 const updateMessage = async (req, res) => {
   const { text } = req.body || {};
-  const message = await messageService.updateMessage(req.params.messageId, {
-    text,
-  });
+  const message = await messageService.updateMessage(
+    req.params.messageId,
+    { text },
+    req.message
+  );
   if (!message) {
     throw new AppError("Mensagem não encontrada.", 404);
   }

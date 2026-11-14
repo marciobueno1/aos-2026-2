@@ -1,6 +1,12 @@
 export { default as corsMiddleware } from "./cors.js";
 export { default as logMiddleware } from "./log.js";
-export { authMiddleware, protectRoutes } from "./auth.js";
+export {
+  authMiddleware,
+  protectRoutes,
+  restrictTo,
+  isMessageOwner,
+  isUserOwner,
+} from "./auth.js";
 export { default as notFoundMiddleware } from "./notFound.js";
 export { default as errorMiddleware } from "./error.js";
 export { limiterMiddleware, authLimiterMiddleware } from "./rateLimiter.js";

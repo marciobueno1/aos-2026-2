@@ -15,8 +15,8 @@ const createMessage = async ({ text, userId }) => {
   });
 };
 
-const updateMessage = async (id, { text }) => {
-  const message = await getMessageById(id);
+const updateMessage = async (id, { text }, existingMessage = null) => {
+  const message = existingMessage || (await getMessageById(id));
   if (!message) {
     return null;
   }
