@@ -118,9 +118,9 @@ export const openapiSpec = {
       CreateUserInput: {
         type: "object",
         properties: {
-          username: { type: "string", minLength: 1, example: "alice" },
-          email: { type: "string", format: "email", example: "alice@unicap.br" },
-          password: { type: "string", minLength: 7, maxLength: 42, example: "password123" },
+          username: { type: "string", minLength: 1, maxLength: 255, example: "alice" },
+          email: { type: "string", format: "email", maxLength: 255, example: "alice@unicap.br" },
+          password: { type: "string", minLength: 7, maxLength: 42, example: "<sua-senha>" },
         },
         required: ["username", "email", "password"],
       },
@@ -128,8 +128,8 @@ export const openapiSpec = {
         type: "object",
         minProperties: 1,
         properties: {
-          username: { type: "string", minLength: 1, example: "alice_novo" },
-          email: { type: "string", format: "email", example: "alice_novo@unicap.br" },
+          username: { type: "string", minLength: 1, maxLength: 255, example: "alice_novo" },
+          email: { type: "string", format: "email", maxLength: 255, example: "alice_novo@unicap.br" },
           password: { type: "string", minLength: 7, maxLength: 42, example: "novasenha123" },
           role: {
             type: "string",
@@ -164,7 +164,7 @@ export const openapiSpec = {
             description: "Username ou e-mail cadastrado.",
             example: "rwieruch",
           },
-          password: { type: "string", example: "password123" },
+          password: { type: "string", example: "<sua-senha>" },
         },
         required: ["login", "password"],
       },

@@ -1,24 +1,49 @@
 import { z } from "zod";
 
+const usernameSchema = ({ required = true } = {}) => {
+  const base = (required ? z.string("Campo obrigatório") : z.string())
+    .trim()
+    .min(1, required ? "Campo obrigatório" : "Campo não pode ser vazio")
+    .max(255, "Username deve ter no máximo 255 caracteres")
+    .refine((val) => !val.includes("@"), {
+      message: "Username não pode conter o caractere '@'.",
+    });
+
+  return required ? base : base.optional();
+};
+
+const emailSchema = ({ required = true } = {}) => {
+  const trimmed = (
+    required ? z.string({ error: "Campo obrigatório" }) : z.string()
+  )
+    .trim()
+    .toLowerCase();
+
+  const sized = required ? trimmed.min(1, "Campo obrigatório") : trimmed;
+  const validated = sized
+    .max(255, "E-mail deve ter no máximo 255 caracteres")
+    .pipe(z.email("Formato de e-mail inválido"));
+
+  return required ? validated : validated.optional();
+};
+
+const passwordSchema = ({ required = true } = {}) => {
+  const base = (required ? z.string("Campo obrigatório") : z.string())
+    .min(7, "A senha deve ter entre 7 e 42 caracteres.")
+    .max(42, "A senha deve ter entre 7 e 42 caracteres.");
+
+  return required ? base : base.optional();
+};
+
 /**
  * Schema de criação de usuário.
  * Valida obrigatoriedade de username, email com formato válido e senha entre 7 e 42 caracteres.
  */
 export const createUserSchema = z.object({
   body: z.object({
-    username: z
-      .string("Campo obrigatório")
-      .trim()
-      .min(1, "Campo obrigatório"),
-    email: z
-      .string({ error: "Campo obrigatório" })
-      .trim()
-      .min(1, "Campo obrigatório")
-      .pipe(z.email("Formato de e-mail inválido")),
-    password: z
-      .string("Campo obrigatório")
-      .min(7, "A senha deve ter entre 7 e 42 caracteres.")
-      .max(42, "A senha deve ter entre 7 e 42 caracteres."),
+    username: usernameSchema({ required: true }),
+    email: emailSchema({ required: true }),
+    password: passwordSchema({ required: true }),
   }),
 });
 
@@ -30,21 +55,9 @@ export const createUserSchema = z.object({
 export const updateUserSchema = z.object({
   body: z
     .object({
-      username: z
-        .string()
-        .trim()
-        .min(1, "Campo não pode ser vazio")
-        .optional(),
-      email: z
-        .string()
-        .trim()
-        .pipe(z.email("Formato de e-mail inválido"))
-        .optional(),
-      password: z
-        .string()
-        .min(7, "A senha deve ter entre 7 e 42 caracteres.")
-        .max(42, "A senha deve ter entre 7 e 42 caracteres.")
-        .optional(),
+      username: usernameSchema({ required: false }),
+      email: emailSchema({ required: false }),
+      password: passwordSchema({ required: false }),
       role: z
         .enum(["USER", "ADMIN"], {
           error: "Perfil de acesso inválido. Valores permitidos: USER, ADMIN.",

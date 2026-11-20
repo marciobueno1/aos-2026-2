@@ -11,6 +11,7 @@ const databaseUrl =
 const sequelize = new Sequelize(databaseUrl, {
   dialect: "postgres",
   dialectModule: pg,
+  logging: process.env.NODE_ENV === "development" ? console.log : false,
 });
 
 const models = {

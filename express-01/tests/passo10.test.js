@@ -22,7 +22,11 @@ import messageController from "../src/controllers/messageController.js";
 import { userService, messageService } from "../src/services/index.js";
 import models, { sequelize } from "../src/models/index.js";
 import { MAX_PAGE, normalizePaginationParams } from "../src/utils/index.js";
-import { runSeeders } from "../src/seeders/index.js";
+import { createUsersWithMessages, runSeeders } from "../src/seeders/index.js";
+import {
+  resolveSeedPassword,
+  buildInitialUsers,
+} from "../src/seeders/20261114000001-initial-users-with-messages.js";
 import { openapiSpec, getSwaggerUiHtml } from "../src/docs/openapi.js";
 import { docs as docsRouter } from "../src/routes/index.js";
 
@@ -527,4 +531,164 @@ test("Fase 10 - src/seeders/index.js: importa dotenv/config no topo e carrega DA
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("Fase 10 - resolveSeedPassword e buildInitialUsers: usa env quando definido, gera fallback CSPRNG 32 chars e protege logs em produção (CWE-532)", async () => {
+  const warnings = [];
+  const mockLogger = {
+    warn: (...args) => warnings.push(args.join(" ")),
+  };
+
+  // 1. Variáveis definidas no ambiente: retorna exatamente as configuradas sem logar
+  const configuredAdmin = resolveSeedPassword({
+    envVarName: "ADMIN_PASSWORD",
+    username: "rwieruch",
+    env: { NODE_ENV: "development", ADMIN_PASSWORD: "env-admin-password" },
+    logger: mockLogger,
+  });
+  assert.equal(configuredAdmin, "env-admin-password");
+  assert.equal(warnings.length, 0);
+
+  const configuredUsers = buildInitialUsers({
+    env: {
+      NODE_ENV: "production",
+      ADMIN_PASSWORD: "env-admin-password",
+      USER_PASSWORD: "env-user-password",
+    },
+    logger: mockLogger,
+  });
+  assert.equal(configuredUsers.length, 2);
+  assert.equal(configuredUsers[0].password, "env-admin-password");
+  assert.equal(configuredUsers[1].password, "env-user-password");
+  assert.equal(warnings.length, 0);
+
+  // 2. Fallback em NODE_ENV=development: gera Base64 de 24 bytes (32 chars dentro de 7..42) e exibe no console
+  const devWarnings = [];
+  const devPassword = resolveSeedPassword({
+    envVarName: "ADMIN_PASSWORD",
+    username: "rwieruch",
+    env: { NODE_ENV: "development" },
+    logger: { warn: (...args) => devWarnings.push(args.join(" ")) },
+  });
+  assert.equal(devPassword.length, 32);
+  assert.match(devPassword, /^[A-Za-z0-9+/]{32}$/);
+  assert.ok(devPassword.length >= 7 && devPassword.length <= 42);
+  assert.equal(devWarnings.length, 1);
+  assert.ok(devWarnings[0].includes("ADMIN_PASSWORD não definida"));
+  assert.ok(devWarnings[0].includes("'rwieruch'"));
+  assert.ok(devWarnings[0].includes(devPassword));
+
+  // 3. Fallback em NODE_ENV=production: gera senha CSPRNG e NUNCA vaza a senha no log (CWE-532)
+  const prodWarnings = [];
+  const prodPassword = resolveSeedPassword({
+    envVarName: "USER_PASSWORD",
+    username: "ddavids",
+    env: { NODE_ENV: "production" },
+    logger: { warn: (...args) => prodWarnings.push(args.join(" ")) },
+  });
+  assert.equal(prodPassword.length, 32);
+  assert.match(prodPassword, /^[A-Za-z0-9+/]{32}$/);
+  assert.equal(prodWarnings.length, 1);
+  assert.ok(prodWarnings[0].includes("USER_PASSWORD não definida"));
+  assert.ok(prodWarnings[0].includes("'ddavids'"));
+  assert.equal(prodWarnings[0].includes(prodPassword), false);
+
+  // 3b. NODE_ENV ausente (ex.: CI): também NUNCA vaza a senha no log
+  const ciWarnings = [];
+  const ciPassword = resolveSeedPassword({
+    envVarName: "ADMIN_PASSWORD",
+    username: "rwieruch",
+    env: {},
+    logger: { warn: (...args) => ciWarnings.push(args.join(" ")) },
+  });
+  assert.equal(ciWarnings.length, 1);
+  assert.equal(ciWarnings[0].includes(ciPassword), false);
+
+  // 4. Fallback em NODE_ENV=test: silencioso e aleatório a cada chamada
+  const testWarnings = [];
+  const generatedUsers = buildInitialUsers({
+    env: { NODE_ENV: "test" },
+    logger: { warn: (...args) => testWarnings.push(args.join(" ")) },
+  });
+  assert.equal(testWarnings.length, 0);
+  assert.equal(generatedUsers[0].password.length, 32);
+  assert.equal(generatedUsers[1].password.length, 32);
+  assert.notEqual(generatedUsers[0].password, generatedUsers[1].password);
+
+  // 5. createUsersWithMessages propaga env e logger personalizados dentro da transação
+  const originalCreate = models.User.create;
+  const originalTransaction = sequelize.transaction;
+  const createdUserInputs = [];
+  sequelize.transaction = async (cb) => await cb({ id: "tx-custom-seed" });
+  models.User.create = async (data) => {
+    createdUserInputs.push(data);
+    return data;
+  };
+  try {
+    await createUsersWithMessages({
+      env: {
+        NODE_ENV: "development",
+        ADMIN_PASSWORD: "custom-admin-pass",
+        USER_PASSWORD: "custom-user-pass",
+      },
+      logger: { warn: () => { throw new Error("Não deveria logar quando env definido"); } },
+    });
+    assert.equal(createdUserInputs[0].password, "custom-admin-pass");
+    assert.equal(createdUserInputs[1].password, "custom-user-pass");
+  } finally {
+    models.User.create = originalCreate;
+    sequelize.transaction = originalTransaction;
+  }
+});
+
+test("Fase 10 - src/models/index.js e models.Message: desativa logging SQL fora de development e define VARCHAR(1000) em text", async () => {
+  assert.equal(models.Message.rawAttributes.text.type._length, 1000);
+  assert.ok(models.Message.rawAttributes.text.type.toSql().includes("1000"));
+  assert.equal(sequelize.options.logging, false);
+
+  const modelsIndexPath = path.resolve(process.cwd(), "src/models/index.js");
+  const source = await fs.readFile(modelsIndexPath, "utf8");
+  assert.ok(
+    source.includes(
+      'logging: process.env.NODE_ENV === "development" ? console.log : false'
+    )
+  );
+
+  const baseEnv = {
+    ...process.env,
+    DATABASE_URL: "postgres://dummy:dummy@localhost:5432/dummy_db",
+  };
+  const prodRes = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      'import { sequelize } from "./src/models/index.js"; console.log(JSON.stringify({ loggingType: typeof sequelize.options.logging, loggingVal: sequelize.options.logging })); await sequelize.close();',
+    ],
+    {
+      cwd: process.cwd(),
+      env: { ...baseEnv, NODE_ENV: "production" },
+      encoding: "utf8",
+    }
+  );
+  assert.equal(prodRes.status, 0, prodRes.stderr || prodRes.stdout);
+  const prodInfo = JSON.parse(prodRes.stdout.trim().split("\n").pop());
+  assert.equal(prodInfo.loggingVal, false);
+
+  const devRes = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      'import { sequelize } from "./src/models/index.js"; console.log(JSON.stringify({ loggingType: typeof sequelize.options.logging })); await sequelize.close();',
+    ],
+    {
+      cwd: process.cwd(),
+      env: { ...baseEnv, NODE_ENV: "development" },
+      encoding: "utf8",
+    }
+  );
+  assert.equal(devRes.status, 0, devRes.stderr || devRes.stdout);
+  const devInfo = JSON.parse(devRes.stdout.trim().split("\n").pop());
+  assert.equal(devInfo.loggingType, "function");
 });

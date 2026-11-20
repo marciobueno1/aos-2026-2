@@ -1,7 +1,7 @@
 import "dotenv/config";
 import models, { sequelize } from "../models/index.js";
 import {
-  INITIAL_USERS,
+  buildInitialUsers,
   up,
   down,
 } from "./20261114000001-initial-users-with-messages.js";
@@ -9,11 +9,20 @@ import {
 /**
  * Popula atomicamente os usuários iniciais (`rwieruch` ADMIN e `ddavids` USER)
  * com suas respectivas mensagens usando os modelos Sequelize dentro de uma transação.
+ *
+ * @param {object} [options]
+ * @param {Record<string, string | undefined>} [options.env=process.env]
+ * @param {{ warn?: Function }} [options.logger=console]
  */
-export const createUsersWithMessages = async () => {
+export const createUsersWithMessages = async ({
+  env = process.env,
+  logger = console,
+} = {}) => {
+  const usersToSeed = buildInitialUsers({ env, logger });
+
   return await sequelize.transaction(async (t) => {
     const createdUsers = [];
-    for (const userSeed of INITIAL_USERS) {
+    for (const userSeed of usersToSeed) {
       const user = await models.User.create(
         {
           username: userSeed.username,

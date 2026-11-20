@@ -632,6 +632,11 @@ test("Fase 9 - seeders/index.js: createUsersWithMessages cria rwieruch e ddavids
 test("Fase 9 - seeder oficial Sequelize CLI (up/down) usa transação, hashes Argon2, UUIDs e remoção por userId", async () => {
   const originalTransaction = sequelize.transaction;
   const originalFindAll = models.User.findAll;
+  const originalAdminPassword = process.env.ADMIN_PASSWORD;
+  const originalUserPassword = process.env.USER_PASSWORD;
+  process.env.ADMIN_PASSWORD = "seed-admin-test-pass";
+  process.env.USER_PASSWORD = "seed-user-test-pass";
+
   assert.equal(seederDefault.up, seederUp);
   assert.equal(seederDefault.down, seederDown);
 
@@ -666,14 +671,14 @@ test("Fase 9 - seeder oficial Sequelize CLI (up/down) usa transação, hashes Ar
     assert.ok(rwieruchRow.createdAt instanceof Date);
     assert.ok(rwieruchRow.updatedAt instanceof Date);
     assert.equal(
-      await argon2.verify(rwieruchRow.password, "password123"),
+      await argon2.verify(rwieruchRow.password, "seed-admin-test-pass"),
       true
     );
 
     assert.match(ddavidsRow.id, /^[0-9a-f-]{36}$/i);
     assert.equal(ddavidsRow.role, "USER");
     assert.equal(
-      await argon2.verify(ddavidsRow.password, "password456"),
+      await argon2.verify(ddavidsRow.password, "seed-user-test-pass"),
       true
     );
 
@@ -739,6 +744,16 @@ test("Fase 9 - seeder oficial Sequelize CLI (up/down) usa transação, hashes Ar
   } finally {
     models.User.findAll = originalFindAll;
     sequelize.transaction = originalTransaction;
+    if (originalAdminPassword === undefined) {
+      delete process.env.ADMIN_PASSWORD;
+    } else {
+      process.env.ADMIN_PASSWORD = originalAdminPassword;
+    }
+    if (originalUserPassword === undefined) {
+      delete process.env.USER_PASSWORD;
+    } else {
+      process.env.USER_PASSWORD = originalUserPassword;
+    }
   }
 });
 

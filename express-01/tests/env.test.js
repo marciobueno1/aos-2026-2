@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 process.env.NODE_ENV = "test";
 
-import { envSchema, validateEnv } from "../src/utils/env.js";
+import { envSchema, validateEnv, PUBLIC_SAMPLE_VALUES } from "../src/utils/env.js";
 
 test("Fase 5 - envSchema: validação de ambiente com valores válidos", () => {
   const validData = {
@@ -148,4 +148,124 @@ test("Fase 5 - envSchema: SYNC_DATABASE e ERASE_DATABASE_ON_SYNC aceitam apenas 
     invalidErase.error.issues.some((i) => i.path.includes("ERASE_DATABASE_ON_SYNC")),
     true
   );
+});
+
+test("Fase 10 - envSchema: ADMIN_PASSWORD e USER_PASSWORD opcionais respeitam intervalo de 7 a 42 caracteres", () => {
+  const baseData = {
+    DATABASE_URL: "postgresql://user:pass@localhost:5432/testdb",
+    ALLOWED_ORIGINS: "http://localhost:3000",
+    JWT_SECRET: "1234567890abcdef",
+  };
+
+  const omitted = envSchema.safeParse(baseData);
+  assert.equal(omitted.success, true);
+  assert.equal(omitted.data.ADMIN_PASSWORD, undefined);
+  assert.equal(omitted.data.USER_PASSWORD, undefined);
+
+  const validPasswords = envSchema.safeParse({
+    ...baseData,
+    ADMIN_PASSWORD: "a".repeat(7),
+    USER_PASSWORD: "b".repeat(42),
+  });
+  assert.equal(validPasswords.success, true);
+
+  const tooShortAdmin = envSchema.safeParse({
+    ...baseData,
+    ADMIN_PASSWORD: "short1",
+  });
+  assert.equal(tooShortAdmin.success, false);
+  assert.equal(
+    tooShortAdmin.error.issues.some(
+      (i) =>
+        i.path.includes("ADMIN_PASSWORD") &&
+        i.message.includes("7 e 42 caracteres")
+    ),
+    true
+  );
+
+  const tooLongUser = envSchema.safeParse({
+    ...baseData,
+    USER_PASSWORD: "x".repeat(43),
+  });
+  assert.equal(tooLongUser.success, false);
+  assert.equal(
+    tooLongUser.error.issues.some(
+      (i) =>
+        i.path.includes("USER_PASSWORD") &&
+        i.message.includes("7 e 42 caracteres")
+    ),
+    true
+  );
+});
+
+test("Fase 10 - envSchema: bloqueia ERASE_DATABASE_ON_SYNC='true' quando NODE_ENV='production'", () => {
+  const baseData = {
+    DATABASE_URL: "postgresql://user:pass@localhost:5432/testdb",
+    ALLOWED_ORIGINS: "https://app.example.com",
+    JWT_SECRET: "1234567890abcdef",
+  };
+
+  const blocked = envSchema.safeParse({
+    ...baseData,
+    NODE_ENV: "production",
+    ERASE_DATABASE_ON_SYNC: "true",
+  });
+  assert.equal(blocked.success, false);
+  assert.equal(
+    blocked.error.issues.some(
+      (i) =>
+        i.path.includes("ERASE_DATABASE_ON_SYNC") &&
+        i.message.includes("não pode ser 'true' em ambiente de produção")
+    ),
+    true
+  );
+
+  const allowedProdFalse = envSchema.safeParse({
+    ...baseData,
+    NODE_ENV: "production",
+    ERASE_DATABASE_ON_SYNC: "false",
+  });
+  assert.equal(allowedProdFalse.success, true);
+
+  const allowedDevTrue = envSchema.safeParse({
+    ...baseData,
+    NODE_ENV: "development",
+    ERASE_DATABASE_ON_SYNC: "true",
+  });
+  assert.equal(allowedDevTrue.success, true);
+});
+
+test("Passo 11 - envSchema: rejeita em produção segredos iguais a valores públicos de exemplo", () => {
+  const baseData = {
+    DATABASE_URL: "postgresql://user:pass@localhost:5432/testdb",
+    ALLOWED_ORIGINS: "https://app.example.com",
+    NODE_ENV: "production",
+  };
+
+  for (const sample of PUBLIC_SAMPLE_VALUES) {
+    const jwtSample = envSchema.safeParse({ ...baseData, JWT_SECRET: sample });
+    if (sample.length >= 10) {
+      assert.equal(jwtSample.success, false, `JWT_SECRET=${sample} deveria ser rejeitado`);
+      assert.ok(jwtSample.error.issues.some((i) => i.path.includes("JWT_SECRET") && i.message.includes("valor público")));
+    }
+
+    const adminSample = envSchema.safeParse({
+      ...baseData,
+      JWT_SECRET: "segredo-proprio-com-mais-de-10",
+      ADMIN_PASSWORD: sample,
+    });
+    if (sample.length >= 7 && sample.length <= 42) {
+      assert.equal(adminSample.success, false, `ADMIN_PASSWORD=${sample} deveria ser rejeitado`);
+    }
+  }
+
+  const devWithSample = envSchema.safeParse({
+    ...baseData,
+    NODE_ENV: "development",
+    JWT_SECRET: "mysupersecretpassword",
+  });
+  assert.equal(devWithSample.success, true);
+
+  const prodOk = envSchema.safeParse({ ...baseData, JWT_SECRET: "segredo-proprio-com-mais-de-10" });
+  assert.equal(prodOk.success, true);
 });

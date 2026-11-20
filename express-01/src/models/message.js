@@ -6,7 +6,7 @@ const getMessageModel = (sequelize, { DataTypes }) => {
       primaryKey: true,
     },
     text: {
-      type: DataTypes.STRING,
+      type: DataTypes.STRING(1000),
       allowNull: false,
       validate: {
         notEmpty: true,

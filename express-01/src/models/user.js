@@ -88,17 +88,24 @@ const getUserModel = (sequelize, { DataTypes }) => {
   };
 
   User.findByLogin = async (login) => {
-    let user = await User.findOne({
-      where: { username: login },
-    });
+    if (typeof login !== "string") {
+      return null;
+    }
 
-    if (!user) {
-      user = await User.findOne({
-        where: { email: login },
+    const normalizedLogin = login.trim();
+    if (!normalizedLogin) {
+      return null;
+    }
+
+    if (normalizedLogin.includes("@")) {
+      return await User.findOne({
+        where: { email: normalizedLogin.toLowerCase() },
       });
     }
 
-    return user;
+    return await User.findOne({
+      where: { username: normalizedLogin },
+    });
   };
 
   return User;

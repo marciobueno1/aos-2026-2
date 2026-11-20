@@ -95,6 +95,22 @@ test("Sem Regressões - errorMiddleware: formata erro 22P02 do PostgreSQL como 4
   assert.equal(res.body.message, "Identificador (ID) fornecido possui formato inválido.");
 });
 
+test("Fase 10 - errorMiddleware: formata erro 22001 (value too long) do PostgreSQL como 400 Bad Request", () => {
+  const dbError = new Error("value too long for type character varying(255)");
+  dbError.name = "SequelizeDatabaseError";
+  dbError.original = { code: "22001" };
+
+  const res = createMockResponse();
+  errorMiddleware(dbError, {}, res, () => {});
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.status, "fail");
+  assert.equal(
+    res.body.message,
+    "Um ou mais campos excedem o tamanho máximo permitido."
+  );
+});
+
 test("Sem Regressões - errorMiddleware: formata erro inesperado como 500 Internal Server Error", () => {
   const genericError = new Error("Falha imprevista no banco de dados");
   const res = createMockResponse();

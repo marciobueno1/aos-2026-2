@@ -5,6 +5,7 @@ import Sequelize from "sequelize";
 import pg from "pg";
 
 import getUserModel from "../src/models/user.js";
+import getMessageModel from "../src/models/message.js";
 
 // Inicializa Sequelize dummy em memória/postgres para teste isolado do modelo User
 const dummySequelize = new Sequelize("postgres://dummy:dummy@localhost:5432/dummy_db", {
@@ -14,6 +15,7 @@ const dummySequelize = new Sequelize("postgres://dummy:dummy@localhost:5432/dumm
 });
 // Para poder instanciar modelos sem conectar ao banco real
 const User = getUserModel(dummySequelize, Sequelize);
+const Message = getMessageModel(dummySequelize, Sequelize);
 
 test("Fase 7 - Modelo User: toJSON omite campo password para prevenir vazamento (CWE-200)", () => {
   const instance = User.build({
@@ -140,4 +142,37 @@ test("Fase 8 - Modelo User: define role padrão 'USER', aceita 'ADMIN' e preserv
   assert.equal(adminUser.role, "ADMIN");
   assert.equal(adminUser.toJSON().role, "ADMIN");
   assert.equal(adminUser.toJSON().password, undefined);
+});
+
+test("Fase 10 - Modelo User: findByLogin distingue email/username em 1 query e normaliza case/trim", async () => {
+  const originalFindOne = User.findOne;
+  const queries = [];
+  User.findOne = async (opts) => {
+    queries.push(opts);
+    return { id: "u-found" };
+  };
+
+  try {
+    const byEmail = await User.findByLogin("  Alice@UNICAP.BR  ");
+    assert.deepEqual(byEmail, { id: "u-found" });
+    assert.equal(queries.length, 1);
+    assert.deepEqual(queries[0], { where: { email: "alice@unicap.br" } });
+
+    const byUsername = await User.findByLogin("  alice  ");
+    assert.deepEqual(byUsername, { id: "u-found" });
+    assert.equal(queries.length, 2);
+    assert.deepEqual(queries[1], { where: { username: "alice" } });
+
+    assert.equal(await User.findByLogin("   "), null);
+    assert.equal(await User.findByLogin(null), null);
+    assert.equal(queries.length, 2);
+  } finally {
+    User.findOne = originalFindOne;
+  }
+});
+
+test("Fase 10 - Modelo Message: campo text utiliza DataTypes.STRING(1000)", () => {
+  const textType = Message.rawAttributes.text.type;
+  assert.equal(textType._length, 1000);
+  assert.ok(textType.toSql().includes("1000"));
 });

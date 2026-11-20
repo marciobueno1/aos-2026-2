@@ -62,6 +62,14 @@ const errorMiddleware = (err, req, res, next) => {
     });
   }
 
+  if (err.name === "SequelizeDatabaseError" && err.original?.code === "22001") {
+    return res.status(400).send({
+      status: "fail",
+      message: "Um ou mais campos excedem o tamanho máximo permitido.",
+      ...(isDev && { stack: err.stack }),
+    });
+  }
+
   if (
     err.type === "entity.too.large" ||
     err.status === 413 ||

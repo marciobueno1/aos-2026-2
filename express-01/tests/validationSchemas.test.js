@@ -193,6 +193,90 @@ test("Fase 6/7 - updateUserSchema: rejeita username vazio e email inválido", ()
   assert.equal(badEmail.success, false);
 });
 
+test("Fase 10 - createUserSchema e updateUserSchema: bloqueiam '@' em username, aplicam max(255) e normalizam email em minúsculas", () => {
+  const atCreate = createUserSchema.safeParse({
+    body: {
+      username: "alice@fake.com",
+      email: "alice@unicap.br",
+      password: "password123",
+    },
+  });
+  assert.equal(atCreate.success, false);
+  assert.equal(
+    atCreate.error.issues.some((i) =>
+      i.message.includes("Username não pode conter o caractere '@'.")
+    ),
+    true
+  );
+
+  const atUpdate = updateUserSchema.safeParse({
+    body: { username: "bob@email.com" },
+  });
+  assert.equal(atUpdate.success, false);
+  assert.equal(
+    atUpdate.error.issues.some((i) =>
+      i.message.includes("Username não pode conter o caractere '@'.")
+    ),
+    true
+  );
+
+  const longUsernameCreate = createUserSchema.safeParse({
+    body: {
+      username: "u".repeat(256),
+      email: "alice@unicap.br",
+      password: "password123",
+    },
+  });
+  assert.equal(longUsernameCreate.success, false);
+  assert.equal(
+    longUsernameCreate.error.issues.some((i) =>
+      i.message.includes("Username deve ter no máximo 255 caracteres")
+    ),
+    true
+  );
+
+  const longUsernameUpdate = updateUserSchema.safeParse({
+    body: { username: "u".repeat(256) },
+  });
+  assert.equal(longUsernameUpdate.success, false);
+
+  const longEmailCreate = createUserSchema.safeParse({
+    body: {
+      username: "alice",
+      email: `${"a".repeat(250)}@b.com`,
+      password: "password123",
+    },
+  });
+  assert.equal(longEmailCreate.success, false);
+  assert.equal(
+    longEmailCreate.error.issues.some((i) =>
+      i.message.includes("E-mail deve ter no máximo 255 caracteres")
+    ),
+    true
+  );
+
+  const longEmailUpdate = updateUserSchema.safeParse({
+    body: { email: `${"a".repeat(250)}@b.com` },
+  });
+  assert.equal(longEmailUpdate.success, false);
+
+  const normalizedCreate = createUserSchema.safeParse({
+    body: {
+      username: "  alice  ",
+      email: "  Alice.Teste@UNICAP.BR  ",
+      password: "password123",
+    },
+  });
+  assert.equal(normalizedCreate.success, true);
+  assert.equal(normalizedCreate.data.body.email, "alice.teste@unicap.br");
+
+  const normalizedUpdate = updateUserSchema.safeParse({
+    body: { email: "  Alice.Novo@UNICAP.BR  " },
+  });
+  assert.equal(normalizedUpdate.success, true);
+  assert.equal(normalizedUpdate.data.body.email, "alice.novo@unicap.br");
+});
+
 // -------------------------------------------------------------
 // userIdParamSchema & messageIdParamSchema
 // -------------------------------------------------------------

@@ -1,6 +1,20 @@
 import { z } from "zod";
 
 /**
+ * Valores de exemplo que já foram (ou são) publicados no repositório.
+ * Em produção, qualquer segredo igual a um deles é rejeitado no startup.
+ */
+export const PUBLIC_SAMPLE_VALUES = [
+  "mysupersecretpassword",
+  "<gere-com-openssl-rand-base64-48>",
+  "password123",
+  "password456",
+];
+
+const isPublicSampleValue = (value) =>
+  typeof value === "string" && PUBLIC_SAMPLE_VALUES.includes(value.trim());
+
+/**
  * Schema de validação das variáveis de ambiente no startup da aplicação.
  * Garante o princípio fail-fast: qualquer variável obrigatória faltante
  * ou malformatada interrompe a execução imediatamente com process.exit(1).
@@ -32,6 +46,36 @@ export const envSchema = z.object({
       error: "ERASE_DATABASE_ON_SYNC deve ser 'true' ou 'false'.",
     })
     .optional(),
+  ADMIN_PASSWORD: z
+    .string()
+    .min(7, "ADMIN_PASSWORD deve ter entre 7 e 42 caracteres.")
+    .max(42, "ADMIN_PASSWORD deve ter entre 7 e 42 caracteres.")
+    .optional(),
+  USER_PASSWORD: z
+    .string()
+    .min(7, "USER_PASSWORD deve ter entre 7 e 42 caracteres.")
+    .max(42, "USER_PASSWORD deve ter entre 7 e 42 caracteres.")
+    .optional(),
+}).refine(
+  (data) =>
+    !(data.NODE_ENV === "production" && data.ERASE_DATABASE_ON_SYNC === "true"),
+  {
+    message: "ERASE_DATABASE_ON_SYNC não pode ser 'true' em ambiente de produção.",
+    path: ["ERASE_DATABASE_ON_SYNC"],
+  }
+).superRefine((data, ctx) => {
+  if (data.NODE_ENV !== "production") {
+    return;
+  }
+  for (const key of ["JWT_SECRET", "ADMIN_PASSWORD", "USER_PASSWORD"]) {
+    if (isPublicSampleValue(data[key])) {
+      ctx.addIssue({
+        code: "custom",
+        path: [key],
+        message: `${key} usa um valor público de exemplo (.env.sample/README). Gere um valor próprio em produção.`,
+      });
+    }
+  }
 });
 
 /**

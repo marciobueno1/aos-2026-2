@@ -48,12 +48,14 @@ O código-fonte em `src/` segue o princípio da Responsabilidade Única (SRP) di
 | Variável | Obrigatória | Padrão | Descrição |
 | :--- | :--- | :--- | :--- |
 | `DATABASE_URL` | Sim | — | URL de conexão PostgreSQL |
-| `JWT_SECRET` | Sim* | — | Segredo HMAC-SHA256 com no mínimo 10 caracteres (*fallback para `MY_SECRET`) |
+| `JWT_SECRET` | Sim* | — | Segredo HMAC-SHA256 com no mínimo 10 caracteres (recomendado: `openssl rand -base64 48`). Em `production`, valores públicos de exemplo são rejeitados no startup (*fallback legado para `MY_SECRET`) |
 | `ALLOWED_ORIGINS` | Sim | — | Lista de origens CORS separadas por vírgula (ex: `http://localhost:3000,http://localhost:3001`) |
 | `PORT` | Não | `4001` | Porta HTTP do servidor Express |
 | `NODE_ENV` | Não | `development` | Ambiente de execução (`development`, `production`, `test`) |
 | `SYNC_DATABASE` | Não | `false` | Sincroniza tabelas do Sequelize no startup (`"true"` ou `"false"`) |
-| `ERASE_DATABASE_ON_SYNC` | Não | `false` | Recria tabelas e executa o seed inicial no startup (`"true"` ou `"false"`) |
+| `ERASE_DATABASE_ON_SYNC` | Não | `false` | Recria tabelas e executa o seed inicial no startup (`"true"` ou `"false"`). Bloqueado quando `NODE_ENV=production` |
+| `ADMIN_PASSWORD` | Não | Aleatória (`crypto.randomBytes(24).toString("base64")`) | Senha inicial (7 a 42 caracteres) do usuário `rwieruch` no seeder. Quando omitida, o seeder gera uma senha aleatória de 32 caracteres (equivalente a `openssl rand -base64 24`), exibida no console **somente** com `NODE_ENV=development` e omitida dos logs nos demais ambientes, inclusive CI sem `NODE_ENV` (CWE-532) |
+| `USER_PASSWORD` | Não | Aleatória (`crypto.randomBytes(24).toString("base64")`) | Senha inicial (7 a 42 caracteres) do usuário `ddavids` no seeder. Segue o mesmo fallback criptográfico e regra de logging de `ADMIN_PASSWORD` |
 
 > **Primeiro boot (criação de tabelas + seed inicial):**
 > Para inicializar o schema no PostgreSQL e popular os usuários padrão na primeira execução, inicie o servidor uma vez com:
@@ -61,6 +63,13 @@ O código-fonte em `src/` segue o princípio da Responsabilidade Única (SRP) di
 > SYNC_DATABASE=true ERASE_DATABASE_ON_SYNC=true npm run dev
 > ```
 > Após a inicialização, mantenha ambas como `false` no `.env` para preservar os dados entre reinícios.
+
+> **Atualizando um banco criado antes do Passo 11:**
+> O `sequelize.sync()` **não altera colunas de tabelas existentes**. Se o seu banco foi criado antes do Passo 11, a coluna `messages.text` ainda é `VARCHAR(255)` e mensagens entre 256 e 1000 caracteres serão recusadas com HTTP 400. Rode uma vez no seu PostgreSQL:
+> ```sql
+> ALTER TABLE "messages" ALTER COLUMN "text" TYPE VARCHAR(1000);
+> ```
+> Em projetos de produção, esse tipo de mudança deve virar uma **migration versionada** (ex.: `sequelize-cli` ou `umzug`).
 
 ---
 
@@ -122,10 +131,10 @@ Para testar rotas protegidas no Swagger UI, autentique-se em `POST /session`, co
 
 ### Usuários Padrão do Seed
 
-| Usuário | E-mail | Senha | Papel (`role`) |
+| Usuário | E-mail | Origem da Senha | Papel (`role`) |
 | :--- | :--- | :--- | :--- |
-| `rwieruch` | `rwieruch@email.com` | `password123` | `ADMIN` |
-| `ddavids` | `ddavids@email.com` | `password456` | `USER` |
+| `rwieruch` | `rwieruch@email.com` | `ADMIN_PASSWORD` no `.env` (ou senha CSPRNG exibida no console no boot inicial em dev) | `ADMIN` |
+| `ddavids` | `ddavids@email.com` | `USER_PASSWORD` no `.env` (ou senha CSPRNG exibida no console no boot inicial em dev) | `USER` |
 
 ### Mapa de Rotas
 
@@ -157,7 +166,7 @@ Para testar rotas protegidas no Swagger UI, autentique-se em `POST /session`, co
 ```bash
 curl -s -X POST http://localhost:4001/session \
   -H "Content-Type: application/json" \
-  -d '{"login": "rwieruch", "password": "password123"}'
+  -d '{"login": "rwieruch", "password": "<SUA_ADMIN_PASSWORD_OU_SENHA_DO_BOOT>"}'
 ```
 
 ### Listar mensagens com paginação e cabeçalhos (`GET /messages`)
