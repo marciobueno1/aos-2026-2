@@ -34,7 +34,7 @@ export const envSchema = z.object({
     .string("ALLOWED_ORIGINS é obrigatório.")
     .min(1, "ALLOWED_ORIGINS é obrigatório."),
   JWT_SECRET: z
-    .string("JWT_SECRET ou MY_SECRET é obrigatório.")
+    .string("JWT_SECRET é obrigatório.")
     .min(10, "JWT_SECRET deve ter no mínimo 10 caracteres."),
   SYNC_DATABASE: z
     .enum(["true", "false"], {
@@ -79,18 +79,12 @@ export const envSchema = z.object({
 });
 
 /**
- * Valida um objeto de variáveis de ambiente com suporte a fallback de JWT_SECRET -> MY_SECRET.
+ * Valida um objeto de variáveis de ambiente contra o envSchema.
  *
  * @param {Record<string, string | undefined>} data
  * @returns {import("zod").SafeParseReturnType<any, any>}
  */
-export const validateEnv = (data = process.env) => {
-  const rawEnv = {
-    ...data,
-    JWT_SECRET: data.JWT_SECRET || data.MY_SECRET,
-  };
-  return envSchema.safeParse(rawEnv);
-};
+export const validateEnv = (data = process.env) => envSchema.safeParse(data);
 
 // Execução Fail-Fast na importação do módulo (ativa por padrão; ignorada em suite de testes isolados)
 const isTestEnv = process.env.NODE_ENV === "test";

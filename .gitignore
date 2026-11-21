@@ -1,5 +1,9 @@
-# Diretório de tarefas internas e scripts de teste
+# Diretório de tarefas internas e credenciais locais
 tarefas/
+*credenciais*.json
+.env
+.env.*
+!.env.sample
 
 # Sistema operacional e logs
 .DS_Store

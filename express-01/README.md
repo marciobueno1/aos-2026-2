@@ -48,7 +48,7 @@ O código-fonte em `src/` segue o princípio da Responsabilidade Única (SRP) di
 | Variável | Obrigatória | Padrão | Descrição |
 | :--- | :--- | :--- | :--- |
 | `DATABASE_URL` | Sim | — | URL de conexão PostgreSQL |
-| `JWT_SECRET` | Sim* | — | Segredo HMAC-SHA256 com no mínimo 10 caracteres (recomendado: `openssl rand -base64 48`). Em `production`, valores públicos de exemplo são rejeitados no startup (*fallback legado para `MY_SECRET`) |
+| `JWT_SECRET` | Sim | — | Segredo HMAC-SHA256 com no mínimo 10 caracteres (recomendado: `openssl rand -base64 48`). Em `production`, valores públicos de exemplo são rejeitados no startup |
 | `ALLOWED_ORIGINS` | Sim | — | Lista de origens CORS separadas por vírgula (ex: `http://localhost:3000,http://localhost:3001`) |
 | `PORT` | Não | `4001` | Porta HTTP do servidor Express |
 | `NODE_ENV` | Não | `development` | Ambiente de execução (`development`, `production`, `test`) |

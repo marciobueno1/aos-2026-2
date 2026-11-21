@@ -92,31 +92,6 @@ test("Fase 5 - envSchema: rejeição de JWT_SECRET com menos de 10 caracteres", 
   );
 });
 
-test("Fase 5 - validateEnv: fallback automático de MY_SECRET quando JWT_SECRET ausente", () => {
-  const data = {
-    DATABASE_URL: "postgresql://user:pass@localhost:5432/testdb",
-    ALLOWED_ORIGINS: "http://localhost:3000",
-    MY_SECRET: "legadosecretpassword",
-  };
-
-  const result = validateEnv(data);
-  assert.equal(result.success, true);
-  assert.equal(result.data.JWT_SECRET, "legadosecretpassword");
-});
-
-test("Fase 5 - validateEnv: preferência por JWT_SECRET sobre MY_SECRET quando ambos presentes", () => {
-  const data = {
-    DATABASE_URL: "postgresql://user:pass@localhost:5432/testdb",
-    ALLOWED_ORIGINS: "http://localhost:3000",
-    JWT_SECRET: "novosecretpassword",
-    MY_SECRET: "legadosecretpassword",
-  };
-
-  const result = validateEnv(data);
-  assert.equal(result.success, true);
-  assert.equal(result.data.JWT_SECRET, "novosecretpassword");
-});
-
 test("Fase 5 - envSchema: SYNC_DATABASE e ERASE_DATABASE_ON_SYNC aceitam apenas 'true' ou 'false'", () => {
   const baseData = {
     DATABASE_URL: "postgresql://user:pass@localhost:5432/testdb",
